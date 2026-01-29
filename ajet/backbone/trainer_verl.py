@@ -99,16 +99,20 @@ def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | to
         return reward_tensor
 
 
-def union_gen_batch_via_task_id(tasks, batch: DataProto, gen_batch_output: DataProto):
+def union_gen_batch_via_task_id(tasks, batch: DataProto, gen_batch_output: DataProto, discard_original_batch=False):
     """
     Union the gen_batch_output with the batch based on task_id.
     """
-    map_task_id_to_index = {t.task_id: i for i, t in enumerate(tasks)}
-    gen_task_task_ids = gen_batch_output.non_tensor_batch["task_ids"]
-    indices = [map_task_id_to_index[tid] for tid in gen_task_task_ids]
-    batch_extend = batch.select_idxs(indices)
-    batch_final = batch_extend.union(gen_batch_output)
-    return batch_final
+    if not discard_original_batch:
+        map_task_id_to_index = {t.task_id: i for i, t in enumerate(tasks)}
+        gen_task_task_ids = gen_batch_output.non_tensor_batch["task_ids"]
+        indices = [map_task_id_to_index[tid] for tid in gen_task_task_ids]
+        batch_extend = batch.select_idxs(indices)
+        batch_final = batch_extend.union(gen_batch_output)
+        return batch_final
+    else:
+        gen_batch_output.non_tensor_batch['uid'] = gen_batch_output.non_tensor_batch["task_ids"]
+        return gen_batch_output
 
 
 def compute_advantage(
@@ -550,16 +554,17 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
                 is_last_step = self.global_steps >= self.total_training_steps
-
+                from ajet import bp
+                bp("BATCH")
                 with marked_timer("step", timing_raw):
                     # generate a batch
-                    logger.info("=== + rollout step begin ===")
+                    logger.info("rollout step begin")
                     with marked_timer("gen", timing_raw, color="red"):
                         assert self.async_rollout_mode
-                        logger.info("=== wake up begin ===")
+                        logger.info("wake up begin")
                         self.async_rollout_manager.wake_up()
                         self._update_interchange_server_status_flag("ENGINE.ROLLING")
-                        logger.info("=== wake up end ===")
+                        logger.info("wake up end")
                         tasks: List[Task] = [
                             dict_to_ajet_task(dict(
                                 task_id=gen_batch.non_tensor_batch["task_id"][i],
@@ -578,16 +583,14 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                                 ]
                             )
                         )
-                        logger.info("=" * 10 + "start fit rollout" + "=" * 10)
+                        logger.info("start fit rollout")
                         self.parallel_env.current_global_steps = self.global_steps
                         context_tracker_arr: List[BaseContextTracker] = self.parallel_env.rollout(
                             tasks, mode="sample", epoch=f"train.{epoch}"
                         )
-                        logger.info("=" * 10 + "end fit rollout" + "=" * 10)
-                        self._update_interchange_server_status_flag("ENGINE.WEIGHT_SYNCING")
-                        logger.info("begin to convert context_tracker_arr to dataproto")
+                        logger.info("end fit rollout")
                         gen_batch_output = self.parallel_env.to_dataproto(context_tracker_arr)
-                        logger.info("end convertion")
+                        logger.info("end dataproto convertion")
 
                         success_rate = [
                             traj.reward_structure.success_rate for traj in context_tracker_arr
@@ -630,17 +633,17 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                         logger.info(
                             f"gen_batch_output.info batch.keys={gen_batch_output.batch.keys()}"
                         )
+                        self._update_interchange_server_status_flag("ENGINE.WEIGHT_SYNCING")
                         self.async_rollout_manager.sleep()
-                    logger.info("=== - rollout step end ===")
+                    logger.info("rollout step end")
 
-                    if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
-                        raise NotImplementedError("REMAX is not supported in GRPO yet.")
 
                     batch.non_tensor_batch["uid"] = np.array(
                         [str(uuid.uuid4()) for _ in range(len(batch.batch))],
                         dtype=object,
                     )
-                    batch = union_gen_batch_via_task_id(tasks, batch, gen_batch_output)
+                    discard_original_batch = self.config.ajet.enable_tinkerscript_mode
+                    batch = union_gen_batch_via_task_id(tasks, batch, gen_batch_output, discard_original_batch)
                     batch.batch["response_mask"] = compute_response_mask(batch)
 
                     if "response_mask" not in batch.batch.keys():
@@ -674,7 +677,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                             )
 
                     # recompute old_log_probs
-                    logger.info("=== + compute log_probs begin ===")
+                    logger.info("+ compute log_probs begin")
                     with marked_timer("old_log_prob", timing_raw, color="blue"):
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                         entropys = old_log_prob.batch["entropys"]
@@ -946,7 +949,8 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                 dtype=object,
             )
             tasks = tasks[: len(main_val_dataset)]
-            test_batch = union_gen_batch_via_task_id(tasks, test_batch, test_output_gen_batch)
+            discard_original_batch = self.config.ajet.enable_tinkerscript_mode
+            test_batch = union_gen_batch_via_task_id(tasks, test_batch, test_output_gen_batch, discard_original_batch)
             # test_batch = test_batch.union(test_output_gen_batch)
             test_batch.meta_info["validate"] = True
 

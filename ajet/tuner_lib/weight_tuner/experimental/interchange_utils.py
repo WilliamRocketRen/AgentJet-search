@@ -35,6 +35,7 @@ class EndEpisodeRequest(BaseModel):
     client_uuid: str
     episode_uuid: str
     workflow_output: WorkflowOutput
+    task_id: str
 
 class EndEpisodeResponse(BaseModel):
     success: bool

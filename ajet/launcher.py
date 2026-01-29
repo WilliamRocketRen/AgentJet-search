@@ -176,9 +176,9 @@ def setup_environment_vars(args, exp_config, main_yaml_fp):
         env["RAY_record_task_actor_creation_sites"] = "true"
         # assert exp_config["ajet"]["rollout"]["max_env_worker"] <= 4, "parallel worker too many for debugging mode"  # type: ignore
         if exp_config["ajet"]["rollout"]["max_env_worker"] > 1:  # type: ignore
-            exp_config["ajet"]["rollout"]["max_env_worker"] = 1
+            # exp_config["ajet"]["rollout"]["max_env_worker"] = 1
             logger.warning(
-                "For debugging mode, max_env_worker is set to 1 to facilitate debugging."
+                "For debugging mode, please set max_env_worker to 1 to facilitate debugging."
             )
         logger.warning("Debug mode is ON")
     else:
@@ -206,7 +206,7 @@ def start_tinkerscript_server(env, config):
     assert config.ajet.enable_experimental_interchange_server, \
         "Please enable_experimental_interchange_server in config to start tinkerscript server."
     from ajet.tuner_lib.weight_tuner.experimental.as_oai_model_server import start_interchange_server
-    start_interchange_server(config, blocking=True)
+    start_interchange_server(config, blocking=True, env=env)
 
 
 def main():

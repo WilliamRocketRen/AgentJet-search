@@ -4,7 +4,7 @@ import httpx
 import yaml
 from typing import List, Tuple
 from loguru import logger
-from ajet.schema.task import WorkflowOutput
+from ajet.schema.task import WorkflowOutput, Task
 from ajet.copilot.job import AgentJetJob
 from ajet.tuner_lib.weight_tuner.as_oai_baseurl_apikey import OpenaiBaseUrlAndApiKey
 from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import (
@@ -76,16 +76,19 @@ class TinkerScriptClient(object):
                 logger.error(f"Error claiming episode: {e}. Retrying in 5s...")
                 time.sleep(5)
 
-    def end_episode(self, episode_uuid: str, workflow_output: WorkflowOutput):
+    def end_episode(self, task:Task, episode_uuid: str, workflow_output: WorkflowOutput):
         if not episode_uuid:
             logger.error("No episode to end.")
             return
 
         try:
+            task_id = task.task_id
+            workflow_output.metadata["task_id"] = task_id
             req_obj = EndEpisodeRequest(
                 client_uuid=self.client_uuid,
                 episode_uuid=episode_uuid,
-                workflow_output=workflow_output
+                workflow_output=workflow_output,
+                task_id=task_id
             )
 
             resp = httpx.post(

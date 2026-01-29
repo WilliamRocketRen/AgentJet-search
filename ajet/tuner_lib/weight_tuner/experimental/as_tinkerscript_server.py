@@ -148,10 +148,11 @@ def register_enable_tinkerscript_mode_routes(
     # --------------------------------------------------------------------------------------
 
     async def register_episode_ready_listener():
-        while True:
-            read_all_episode_status()
-            await asyncio.sleep(10)  # check every 10 seconds
-            find_claimed_episodes_that_need_to_be_unclaimed()
+        pass
+        # while True:
+        #     read_all_episode_status()
+        #     await asyncio.sleep(10)  # check every 10 seconds
+        #     find_claimed_episodes_that_need_to_be_unclaimed()
 
     def read_all_episode_status() -> Optional[EpisodeStatus]:
         print_buffer = []
@@ -242,17 +243,26 @@ def register_enable_tinkerscript_mode_routes(
 
             # Create args namespace
             args = SimpleNamespace(
-                conf=main_yaml_fp, backbone=backbone, exp_dir=exp_dir_final, with_logview=False, debug=False,
+                conf=main_yaml_fp, backbone=backbone, exp_dir=exp_dir_final, with_logview=False,
+                debug=False,
             )
+            # get debug param
+            should_debug = os.environ.get("RAY_DEBUG_POST_MORTEM", "0") == "1"
+            debug_tags = os.environ.get("DEBUG_TAGS", "")
+            if should_debug:
+                args.debug = debug_tags
+
+            def override_param_callback(config):
+                config['ajet']['interchange_server']['already_started'] = True
+                config['ajet']['interchange_server']['interchange_server_port'] = int(os.getenv("AJET_DAT_INTERCHANGE_PORT"))   # type: ignore
+                return config
 
             # Finalize experiment config
             main_yaml_fp, exe_exp_base, exp_name, exp_config = prepare_experiment_config(
-                main_yaml_fp, exp_dir_final, backbone
+                main_yaml_fp, exp_dir_final, backbone, override_param_callback
             )
 
             # Setup environment variables
-            exp_config['ajet']['interchange_server']['already_started'] = True
-            exp_config['ajet']['interchange_server']['interchange_server_port'] = int(os.getenv("AJET_DAT_INTERCHANGE_PORT"))   # type: ignore
             env, exp_config = setup_environment_vars(args, exp_config, main_yaml_fp)
 
             # Start ray if not already started
@@ -421,6 +431,10 @@ def register_enable_tinkerscript_mode_routes(
         client_uuid = req.client_uuid
         episode_uuid = req.episode_uuid
         workflow_output = req.workflow_output
+        task_id = req.task_id
+
+        assert "task_id" in workflow_output.metadata, "workflow_output.metadata must contain task_id"
+        assert workflow_output.metadata["task_id"] == task_id, "workflow_output.metadata.task_id must match req.task_id"
 
         if 'episodes' not in shared_mem_dict:
             logger.error(f"[server] No episodes registered yet.")

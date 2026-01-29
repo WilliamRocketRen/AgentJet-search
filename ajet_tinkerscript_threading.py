@@ -10,6 +10,7 @@ from ajet.tuner_lib.weight_tuner.as_oai_baseurl_apikey import OpenaiBaseUrlAndAp
 from ajet import WorkflowOutput
 from ajet.task_reader import RouterTaskReader
 from ajet.utils.retry import retry_with_backoff
+from ajet.schema.task import Task
 from concurrent.futures import ThreadPoolExecutor
 
 # --------- configurations that take effect locally -------------
@@ -44,6 +45,7 @@ def main():
 
     # Hand shake with remote tinkerscript server
     tinkerscript_remote = TinkerScriptClient(REMOTE_TINKERJET_URL)
+    tinkerscript_remote.stop_engine()
     tinkerscript_remote.auto_sync_train_config_and_start_engine(
         AgentJetJob(
             algorithm="grpo",
@@ -52,8 +54,6 @@ def main():
             grpo_n=LOCAL_GRPO_N,
         )
     )
-    # tinkerscript_remote.stop_engine()
-
     # tinkerscript_remote = connect_to_tinkerscript_server(sync_train_config=False, start_engine=False)
     submit_sem = threading.BoundedSemaphore(LOCAL_MAX_PARALLEL)
 
@@ -67,7 +67,7 @@ def main():
                 # execute agent
                 workflow_output = execute_agent(task, api_baseurl_key)
                 # report output back to tinkerscript remote
-                tinkerscript_remote.end_episode(episode_uuid, workflow_output)
+                tinkerscript_remote.end_episode(task, episode_uuid, workflow_output)
                 # collect reward
                 group_reward.append(workflow_output.reward)
             print(f"Group reward mean & std: {sum(group_reward)/len(group_reward)} +/- { (max(group_reward)-min(group_reward))/2 }")
@@ -94,7 +94,7 @@ def main():
 
 
 @retry_with_backoff(max_retry=2)
-def execute_agent(task, api_baseurl_key: OpenaiBaseUrlAndApiKey):
+def execute_agent(task: Task, api_baseurl_key: OpenaiBaseUrlAndApiKey):
     # Prepare base_url, api_key
     base_url, api_key = (api_baseurl_key.base_url, api_baseurl_key.api_key)
     # Read dataset item

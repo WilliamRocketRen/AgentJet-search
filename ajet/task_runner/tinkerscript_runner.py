@@ -40,7 +40,7 @@ class TinkerScriptRunner(BaseAgentRunner):
         zmq_socket = zmq.Context().socket(zmq.REP)
         zmq_socket.bind(zmq_listen_result_addr)
         speicial_messages = [
-            "RUNNER.RESET_CONTEXT_TRACKER"
+            "RUNNER.SPECIAL.RESET_CONTEXT_TRACKER"
         ]
         while True:
             # <wait for 1/2>:
@@ -102,6 +102,12 @@ class TinkerScriptRunner(BaseAgentRunner):
             openai_api_key=api_key,
             context_tracker=context_tracker,
         )
+
+        # the most important thing is to fix task_id to client task_id, set task_id to workflow_task and context_tracker task_id
+        assert "task_id" in workflow_output.metadata, "workflow_output.metadata must contain task_id"
+        task_id = workflow_output.metadata.get("task_id", "")
+        workflow_task.task_id = task_id
+        context_tracker.task_id = task_id
 
         if workflow_output.reward is not None:
             raw_reward, is_success = (

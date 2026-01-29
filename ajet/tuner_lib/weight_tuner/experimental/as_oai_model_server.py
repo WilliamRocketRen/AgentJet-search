@@ -271,7 +271,7 @@ class InterchangeServer(Process):
 
 
 # Convenience function for quick server startup
-def start_interchange_server(config, blocking=False) -> int:
+def start_interchange_server(config, blocking=False, env={}) -> int:
     # Read config
     already_started = config.ajet.interchange_server.already_started
     experiment_dir = config.ajet.experiment_dir
@@ -293,6 +293,9 @@ def start_interchange_server(config, blocking=False) -> int:
 
     # init interchage server sub-process
     if not already_started:
+        # apply env vars
+        os.environ.update(env)
+        # start interchange server
         interchange_server = InterchangeServer(
             experiment_dir,
             port,
@@ -342,6 +345,14 @@ def start_interchange_server(config, blocking=False) -> int:
                        f"URL 1: {localhost_url}\n------\n"
                        f"URL 2: {host_url}\n------\n"
                        f"Press Ctrl+C to stop.")
-        if interchange_server:
-            interchange_server.join()
+        try:
+            if interchange_server:
+                interchange_server.join()
+        except KeyboardInterrupt:
+            logger.info("Shutting down interchange server...")
+            try: httpx.get(f"http://127.0.0.1:{port}/stop_engine", timeout=8).status_code
+            except Exception: pass
+
+            if interchange_server:
+                interchange_server.terminate()
         return -1
