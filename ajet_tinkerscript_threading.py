@@ -79,7 +79,7 @@ def main():
     # Main Training loop
     with ThreadPoolExecutor(max_workers=LOCAL_MAX_PARALLEL) as executor:
         for epoch in range(LOCAL_NUM_EPOCH):
-            for task in dataset.get_training_tasks()[:100]:
+            for task in dataset.get_training_tasks():
                 print(f"Submitting task for epoch {epoch}")
                 submit_sem.acquire()
                 executor.submit(rollout, task)

@@ -17,11 +17,7 @@ import ray
 import yaml
 from loguru import logger
 
-from ajet.launcher import (
-    check_avail_gpu,
-    get_backbone_target,
-    setup_environment_vars,
-)
+
 from ajet.default_config.ajet_default import Config
 from ajet.utils.config_utils import (
     expand_ajet_hierarchical_config,
@@ -29,7 +25,12 @@ from ajet.utils.config_utils import (
     read_ajet_hierarchical_config,
 )
 from ajet.utils.dynamic_import import cls_to_path
-from ajet.utils.launch_utils import execute_training_process
+from ajet.utils.launch_utils import (
+    execute_training_process,
+    check_avail_gpu,
+    get_backbone_target,
+    setup_environment_vars,
+)
 
 
 class AgentJetJob:
