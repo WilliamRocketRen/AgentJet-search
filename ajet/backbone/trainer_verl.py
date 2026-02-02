@@ -112,6 +112,15 @@ def union_gen_batch_via_task_id(tasks, batch: DataProto, gen_batch_output: DataP
         return batch_final
     else:
         gen_batch_output.non_tensor_batch['uid'] = gen_batch_output.non_tensor_batch["task_ids"]
+        task_id_counter = {}
+        for i, tid in enumerate(gen_batch_output.non_tensor_batch["task_ids"]):
+            if tid in task_id_counter:
+                task_id_counter[tid] += 1
+            else:
+                task_id_counter[tid] = 1
+            current_id = task_id_counter[tid]
+            gen_batch_output.non_tensor_batch['rollout_ids'][i] = f"T{tid}R{current_id}"
+        logger.info(f'task_id_counter: {task_id_counter}')
         return gen_batch_output
 
 

@@ -182,7 +182,7 @@ class TinkerScriptClient(object):
                 current_time = time.time()
 
                 # Report status every 5 seconds
-                if current_time - last_report_time >= 5:
+                if current_time - last_report_time >= 10:
                     logger.info(f"Current engine status (already waited {current_time - init_poll_time:.1f}s): {current_status}")
                     last_report_time = current_time
 

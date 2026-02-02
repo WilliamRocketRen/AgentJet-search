@@ -37,6 +37,8 @@ class HuggingFaceTaskReader(BaseTaskReader):
             else:
                 # Load from Hugging Face hub
                 dataset = datasets.load_dataset(self.dataset_name, split=split)
+            # shuffle dataset
+            dataset = dataset.shuffle(seed=42)
         except Exception as e:
             raise ValueError(
                 f"Failed to load dataset '{self.dataset_name}' with split '{split}': {str(e)}"
