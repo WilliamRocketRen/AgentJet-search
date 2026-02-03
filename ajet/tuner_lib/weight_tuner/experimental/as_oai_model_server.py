@@ -355,4 +355,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
 
             if interchange_server:
                 interchange_server.terminate()
+            if enable_tinkerscript_mode:
+                from ajet.tuner_lib.weight_tuner.experimental.as_tinkerscript_server import kill_process_tree
+                kill_process_tree(None, None)
         return -1

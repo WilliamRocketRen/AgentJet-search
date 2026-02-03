@@ -493,7 +493,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
 
         # perform validation before training
         # currently, we only support validation using the reward_function.
-        if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
+        if (self.val_reward_fn is not None) and (self.config.trainer.get("val_before_train", True)) and (not self.config.ajet.enable_tinkerscript_mode):
             val_metrics = self._validate()
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
@@ -784,6 +784,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                         self.val_reward_fn is not None
                         and self.config.trainer.test_freq > 0
                         and (is_last_step or self.global_steps % self.config.trainer.test_freq == 0)
+                        and (not self.config.ajet.enable_tinkerscript_mode)
                     ):
                         with marked_timer("testing", timing_raw, color="green"):
                             val_metrics: dict = self._validate()
@@ -934,17 +935,16 @@ class AjetRayPPOTrainer(RayPPOTrainer):
             self.async_rollout_manager.wake_up()
             main_val_dataset = self.get_eval_dataset()
 
-            logger.info("=" * 10 + "start validate rollout" + "=" * 10)
+            logger.info("Starting validate rollout")
             context_tracker_arr, tasks, val_metrics = self.eval_dataset(
                 target_dataset=main_val_dataset,
                 target_dataset_name="main_val_dataset",
                 mode="validate",
                 epoch="test.1",
             )
-            logger.info("=" * 10 + "end validate rollout" + "=" * 10)
+            logger.info("Completed validate rollout")
             test_output_gen_batch = self.parallel_env.to_dataproto(context_tracker_arr)
             self.async_rollout_manager.sleep()
-            logger.info("validation generation end")
 
             # Store generated outputs
             output_ids = test_output_gen_batch.batch["responses"]

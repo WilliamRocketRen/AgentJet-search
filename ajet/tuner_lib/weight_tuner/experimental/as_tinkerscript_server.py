@@ -460,6 +460,28 @@ def register_enable_tinkerscript_mode_routes(
         return EndEpisodeResponse(success=True)
 
 
+    @app.post("/abort_episode", response_model=EndEpisodeResponse)
+    async def abort_episode(req: EndEpisodeRequest):
+        # receive workflow output data
+        episode_uuid = req.episode_uuid
+        workflow_output = req.workflow_output
+        task_id = req.task_id
+
+        assert "task_id" in workflow_output.metadata, "workflow_output.metadata must contain task_id"
+        assert workflow_output.metadata["task_id"] == task_id, "workflow_output.metadata.task_id must match req.task_id"
+
+        if 'episodes' not in shared_mem_dict:
+            logger.error(f"[server] No episodes registered yet.")
+            return EndEpisodeResponse(success=True)
+        if (f"episodes-{episode_uuid}") not in shared_mem_dict:
+            logger.error(f"[server] Episode {episode_uuid} not found.")
+            return EndEpisodeResponse(success=True)
+
+        _revert_episode_to_unclaimed(episode_uuid)
+
+        # return success
+        return EndEpisodeResponse(success=True)
+
 
     @app.post("/can_continue_episode", response_model=CanContinueEpisodeResponse)
     async def can_continue_episode(req: CanContinueEpisodeRequest):
@@ -492,68 +514,80 @@ def register_enable_tinkerscript_mode_routes(
         - Remove all episodes (registered, claimed, and unclaimed)
         - Clean up shared memory state
         """
-        try:
-            import psutil
+        kill_process_tree(shared_mem_dict_lock, shared_mem_dict)
 
-            killed_pids = []
-            errors = []
+    return app, register_episode_ready_listener()
 
-            # Get the training process PID if it exists
+
+
+def kill_process_tree(shared_mem_dict_lock=None, shared_mem_dict=None):
+    try:
+        import psutil
+
+        killed_pids = []
+        errors = []
+
+        # Get the training process PID if it exists
+        if shared_mem_dict and shared_mem_dict_lock:
             training_pid = shared_mem_dict.get('training_process_pid', None)
+        else:
+            training_pid = os.getpid()
 
-            if training_pid is not None:
+        if training_pid is not None:
+            try:
+                # Try to get the process and all its children
                 try:
-                    # Try to get the process and all its children
-                    try:
-                        parent = psutil.Process(training_pid)
-                        children = parent.children(recursive=True)
+                    parent = psutil.Process(training_pid)
+                    children = parent.children(recursive=True)
 
-                        # Kill all child processes first
-                        for child in children:
-                            try:
-                                logger.info(f"[stop_engine] Terminating child process PID: {child.pid}")
-                                child.terminate()
-                                killed_pids.append(child.pid)
-                            except psutil.NoSuchProcess:
-                                logger.warning(f"[stop_engine] Child process {child.pid} already terminated")
-                            except Exception as e:
-                                logger.error(f"[stop_engine] Error terminating child process {child.pid}: {e}")
-                                errors.append(f"Child {child.pid}: {str(e)}")
-
-                        # Wait for children to terminate gracefully
-                        gone, alive = psutil.wait_procs(children, timeout=16)
-
-                        # Force kill any remaining children
-                        for p in alive:
-                            try:
-                                logger.warning(f"[stop_engine] Force killing child process PID: {p.pid}")
-                                p.kill()
-                            except Exception as e:
-                                logger.error(f"[stop_engine] Error force killing child {p.pid}: {e}")
-                                errors.append(f"Force kill child {p.pid}: {str(e)}")
-
-                        # Now terminate the parent process
-                        logger.info(f"[stop_engine] Terminating parent process PID: {training_pid}")
-                        parent.terminate()
-                        killed_pids.append(training_pid)
-
-                        # Wait for parent to terminate gracefully
+                    # Kill all child processes first
+                    for child in children:
                         try:
-                            parent.wait(timeout=3)
-                        except psutil.TimeoutExpired:
-                            logger.warning(f"[stop_engine] Force killing parent process PID: {training_pid}")
-                            parent.kill()
+                            logger.info(f"[stop_engine] Terminating child process PID: {child.pid}")
+                            child.terminate()
+                            killed_pids.append(child.pid)
+                        except psutil.NoSuchProcess:
+                            logger.warning(f"[stop_engine] Child process {child.pid} already terminated")
+                        except Exception as e:
+                            logger.error(f"[stop_engine] Error terminating child process {child.pid}: {e}")
+                            errors.append(f"Child {child.pid}: {str(e)}")
 
-                    except psutil.NoSuchProcess:
-                        logger.warning(f"[stop_engine] Process {training_pid} not found (may have already terminated)")
+                    # Wait for children to terminate gracefully
+                    gone, alive = psutil.wait_procs(children, timeout=16)
 
-                except Exception as e:
-                    logger.error(f"[stop_engine] Error killing training process: {e}")
-                    errors.append(f"Training process: {str(e)}")
-            else:
-                logger.info("[stop_engine] No training process PID found in shared memory")
+                    # Force kill any remaining children
+                    for p in alive:
+                        try:
+                            logger.warning(f"[stop_engine] Force killing child process PID: {p.pid}")
+                            p.kill()
+                        except Exception as e:
+                            logger.error(f"[stop_engine] Error force killing child {p.pid}: {e}")
+                            errors.append(f"Force kill child {p.pid}: {str(e)}")
 
-            # Clean up all episodes from shared memory
+                    # Now terminate the parent process
+                    logger.info(f"[stop_engine] Terminating parent process PID: {training_pid}")
+                    parent.terminate()
+                    killed_pids.append(training_pid)
+
+                    # Wait for parent to terminate gracefully
+                    try:
+                        parent.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        logger.warning(f"[stop_engine] Force killing parent process PID: {training_pid}")
+                        parent.kill()
+
+                except psutil.NoSuchProcess:
+                    logger.warning(f"[stop_engine] Process {training_pid} not found (may have already terminated)")
+
+            except Exception as e:
+                logger.error(f"[stop_engine] Error killing training process: {e}")
+                errors.append(f"Training process: {str(e)}")
+        else:
+            logger.info("[stop_engine] No training process PID found in shared memory")
+
+        # Clean up all episodes from shared memory
+        episode_keys = []
+        if shared_mem_dict and shared_mem_dict_lock:
             with shared_mem_dict_lock:
                 episode_keys = [k for k in shared_mem_dict.keys() if k.startswith("episodes-")]
                 for key in episode_keys:
@@ -575,32 +609,31 @@ def register_enable_tinkerscript_mode_routes(
 
                 logger.info("[stop_engine] Engine status set to OFFLINE")
 
-            result = {
-                "success": True,
-                "killed_pids": killed_pids,
-                "episodes_removed": len(episode_keys) if 'episode_keys' in locals() else 0,
-            }
+        result = {
+            "success": True,
+            "killed_pids": killed_pids,
+            "episodes_removed": len(episode_keys) if 'episode_keys' in locals() else 0,
+        }
 
-            if errors:
-                result["warnings"] = errors
-                logger.warning(f"[stop_engine] Completed with warnings: {errors}")
-            else:
-                logger.info(f"[stop_engine] Successfully terminated engine and reset state")
+        if errors:
+            result["warnings"] = errors
+            logger.warning(f"[stop_engine] Completed with warnings: {errors}")
+        else:
+            logger.info(f"[stop_engine] Successfully terminated engine and reset state")
 
-            return result
+        return result
 
-        except Exception as e:
-            logger.error(f"[stop_engine] Unexpected error: {e}")
-            import traceback
-            traceback.print_exc()
+    except Exception as e:
+        logger.error(f"[stop_engine] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
 
-            # Even if there's an error, try to reset the status
-            try:
+        # Even if there's an error, try to reset the status
+        try:
+            if shared_mem_dict and shared_mem_dict_lock:
                 with shared_mem_dict_lock:
                     shared_mem_dict['engine_status'] = "ENGINE.OFFLINE"
-            except:
-                pass
+        except:
+            pass
 
-            return {"success": False, "error": str(e)}
-
-    return app, register_episode_ready_listener()
+        return {"success": False, "error": str(e)}

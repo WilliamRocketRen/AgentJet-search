@@ -146,6 +146,7 @@ class AjetTuner(object):
         self.target2proxy_registry[target_name][agent_name] = explicit_tuner
         return explicit_tuner
 
+
     def _is_target_trainable(self, target_name) -> bool:
         """Determine whether user have used `trainable_targets` to explicitly control training targets.
         """

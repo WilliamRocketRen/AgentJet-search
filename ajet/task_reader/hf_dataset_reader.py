@@ -1,8 +1,8 @@
-from typing import List, Generator
 
 import datasets
 
 from ajet.schema.task import Task
+from typing import List, Generator
 from ajet.task_reader.task_reader_base import BaseTaskReader
 
 
@@ -38,7 +38,7 @@ class HuggingFaceTaskReader(BaseTaskReader):
                 # Load from Hugging Face hub
                 dataset = datasets.load_dataset(self.dataset_name, split=split)
             # shuffle dataset
-            dataset = dataset.shuffle(seed=42)
+            dataset = dataset.shuffle()
         except Exception as e:
             raise ValueError(
                 f"Failed to load dataset '{self.dataset_name}' with split '{split}': {str(e)}"

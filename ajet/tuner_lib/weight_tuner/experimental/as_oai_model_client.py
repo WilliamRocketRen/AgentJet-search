@@ -122,10 +122,10 @@ class InterchangeClient:
 
         # wait till service begin running
         time.sleep(0.5)
-        w_time = 1
+        wait_time = 1
         while future._state == 'PENDING':
-            time.sleep(min(w_time * 2, 10))
-            w_time += 1
+            time.sleep(min(wait_time * 2, 10))
+            wait_time += 1
 
         if DEBUG: logger.info(f"[client] {self.episode_uuid} | Future ready...")
         return self.episode_contect_address

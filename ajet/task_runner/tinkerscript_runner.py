@@ -15,32 +15,50 @@ from ajet.task_runner.base_runner import BaseAgentRunner
 from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import http_register_episode, get_zmq_socket
 from loguru import logger
 from ajet import Workflow
+from typing import Callable
 
 DEBUG = False
 
 context = zmq.Context()
 atexit.register(context.term)
 
+class SwarmReceiveAbortException(Exception):
+    pass
+
 class TinkerScriptRunner(BaseAgentRunner):
 
-    def register_episode_and_wait_output(self, episode_uuid: str, openai_base_url: str, openai_api_key: str, context_tracker: BaseContextTracker) -> WorkflowOutput:
+    def register_episode_and_wait_output(
+        self,
+        episode_uuid: str,
+        openai_base_url: str,
+        openai_api_key: str,
+        context_tracker: BaseContextTracker,
+        tuner:AjetTuner,
+        should_exit:Callable
+    ) -> WorkflowOutput:
         """Register the episode as ready in the TinkerScript data interchange center."""
         # parse episode_uuid, openai_base_url, openai_api_key
         zmq_listen_result_addr, ipc_path = get_zmq_socket(self.config, episode_uuid, tag="workflow")
-        http_register_episode(
-            self.config,
-            episode_uuid=episode_uuid,
-            openai_base_url=openai_base_url,
-            openai_api_key=openai_api_key,
-            zmq_listen_result_addr=zmq_listen_result_addr,
-        )
+        try:
+            http_register_episode(
+                self.config,
+                episode_uuid=episode_uuid,
+                openai_base_url=openai_base_url,
+                openai_api_key=openai_api_key,
+                zmq_listen_result_addr=zmq_listen_result_addr,
+            )
+        except Exception as e:
+            raise SwarmReceiveAbortException(f"Episode {episode_uuid} cannot be registered.")
+
         if DEBUG: logger.info(f"zmq_listen_result_addr: {zmq_listen_result_addr}")
 
         # begin wait for result
         zmq_socket = zmq.Context().socket(zmq.REP)
         zmq_socket.bind(zmq_listen_result_addr)
+        zmq_socket.setsockopt(zmq.RCVTIMEO, 3*1000)  # 3 second timeout for REP
         speicial_messages = [
             "RUNNER.SPECIAL.RESET_CONTEXT_TRACKER"
+            "RUNNER.SPECIAL.ABORT"
         ]
         while True:
             # <wait for 1/2>:
@@ -51,7 +69,16 @@ class TinkerScriptRunner(BaseAgentRunner):
             #   <from_sourcefile>: ajet/tuner_lib/weight_tuner/experimental/as_tinkerscript_server.py
             #   <from_code>: socket.send_string("RUNNER.SPECIAL.RESET_CONTEXT_TRACKER")
             #   <expect>: "RUNNER.SPECIAL.RESET_CONTEXT_TRACKER"
-            message = zmq_socket.recv_string()
+            try:
+                message = zmq_socket.recv_string()
+            except zmq.Again as e:
+                if should_exit():
+                    context_tracker.reset()
+                    tuner.terminate_episode()
+                    raise SwarmReceiveAbortException(f"Episode {episode_uuid} aborted due to system exit.")
+                else:
+                    continue
+            # process messages
             if message not in speicial_messages:
                 zmq_socket.send_string("ack")
                 break
@@ -59,14 +86,23 @@ class TinkerScriptRunner(BaseAgentRunner):
                 logger.warning(f"Received reset command for episode {episode_uuid}.")
                 context_tracker.reset()
                 zmq_socket.send_string("ack")
+            elif message == "RUNNER.SPECIAL.ABORT":
+                logger.warning(f"Received abort command for episode {episode_uuid}.")
+                context_tracker.reset()
+                zmq_socket.send_string("ack")
+                tuner.terminate_episode()
+                raise SwarmReceiveAbortException(f"Episode {episode_uuid} aborted.")
             else:
+                tuner.terminate_episode()
                 raise RuntimeError(f"Unknown special message received: {message}")
 
-        logger.success(f"Received workflow output for episode {episode_uuid}")
+        final_output = WorkflowOutput(**json.loads(message))
+        reward = final_output.reward
+        logger.success(f"Received workflow output for episode {episode_uuid} (Reward: {reward})")
         zmq_socket.close()
         if ipc_path and os.path.exists(ipc_path): os.remove(ipc_path)
 
-        return WorkflowOutput(**json.loads(message))
+        return final_output
 
 
     def execute(self, workflow_task: WorkflowTask) -> BaseContextTracker:
@@ -92,15 +128,19 @@ class TinkerScriptRunner(BaseAgentRunner):
             config=self.config,
         )
 
+        # from tuner, we get base_url and api_key
         baseurl_apikey = tuner.as_oai_baseurl_apikey()
         base_url = baseurl_apikey.base_url
         api_key = baseurl_apikey.api_key
 
+        # wait for remote client to return workflow output
         workflow_output: WorkflowOutput = self.register_episode_and_wait_output(
             episode_uuid=context_tracker.episode_uuid,
             openai_base_url=base_url,
             openai_api_key=api_key,
             context_tracker=context_tracker,
+            tuner=tuner,
+            should_exit=(lambda: observation_window["stop"][task_thread_index])
         )
 
         # the most important thing is to fix task_id to client task_id, set task_id to workflow_task and context_tracker task_id
@@ -109,6 +149,7 @@ class TinkerScriptRunner(BaseAgentRunner):
         workflow_task.task_id = task_id
         context_tracker.task_id = task_id
 
+        # process reward
         if workflow_output.reward is not None:
             raw_reward, is_success = (
                 workflow_output.reward,
@@ -117,11 +158,11 @@ class TinkerScriptRunner(BaseAgentRunner):
         else:
             raise ValueError("workflow_output.reward is None in TinkerScriptRunner, this is currently not allowed.")
 
+        # release gym_env
         workflow_task.gym_env = None  # clear gym env client reference to avoid serialization issue
 
-        assert not isinstance(
-            raw_reward, list
-        ), "AgentJet will support step reward in future versions."
+        # check reward
+        assert not isinstance(raw_reward, list), "AgentJet will support step reward in future versions."
 
         # register reward
         # TODO: support multi-step reward
@@ -132,6 +173,7 @@ class TinkerScriptRunner(BaseAgentRunner):
             madness=0,
             description="",
         )
+        # process reward
         context_tracker.process_reward(reward)
         # generate token before merging
         context_tracker.group_merge()

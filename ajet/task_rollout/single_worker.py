@@ -16,6 +16,7 @@ from ajet.task_runner.tinkerscript_runner import TinkerScriptRunner
 from ajet.utils.retry import retry_with_backoff
 from ajet.utils.sample import get_sample_params
 from ajet.utils.testing_utils import TestFailException, TestSuccessException
+from ajet.task_runner.tinkerscript_runner import SwarmReceiveAbortException
 
 
 class BaseRolloutManager:
@@ -123,6 +124,8 @@ class BaseRolloutManager:
                 tracker = agent_runner.execute(
                     workflow_task=workflow_task,
                 )
+            except SwarmReceiveAbortException as exc:  # noqa: BLE001
+                return None # type: ignore
             except TestSuccessException as e:
                 logger.success(
                     f"env_worker.agent_flow completed with TestSuccessException: {e.args}"

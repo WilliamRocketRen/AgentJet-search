@@ -107,6 +107,37 @@ class TinkerScriptClient(object):
         except Exception as e:
             logger.error(f"Error ending episode: {e}")
 
+    def abort_episode(self, task:Task, episode_uuid: str, workflow_output: WorkflowOutput):
+        if not episode_uuid:
+            logger.error("No episode to end.")
+            return
+
+        try:
+            task_id = task.task_id
+            workflow_output.metadata["task_id"] = task_id
+            req_obj = EndEpisodeRequest(
+                client_uuid=self.client_uuid,
+                episode_uuid=episode_uuid,
+                workflow_output=workflow_output,
+                task_id=task_id
+            )
+
+            resp = httpx.post(
+                f"{self.server_url}/abort_episode",
+                json=req_obj.model_dump(),
+                timeout=30
+            )
+            resp.raise_for_status()
+            data = EndEpisodeResponse.model_validate(resp.json())
+
+            if data.success:
+                logger.info(f"Ended episode {episode_uuid}")
+            else:
+                logger.error(f"Failed to end episode {episode_uuid}")
+
+        except Exception as e:
+            logger.error(f"Error ending episode: {e}")
+
     def sync_train_config(self, agent_jet_job: AgentJetJob):
         """
         Sync training configuration to the TinkerScript server.
@@ -205,7 +236,10 @@ class TinkerScriptClient(object):
                 timeout=10
             )
             resp.raise_for_status()
-            return resp.json().get("engine_status", "unknown")
+            result = resp.json().get("engine_status", "unknown")
+            if result == "unknown":
+                logger.warning("get_engine_status: " + resp.json())
+            return result
         except Exception as e:
             logger.error(f"Error getting engine status: {e}")
             return "unknown"
@@ -245,11 +279,19 @@ class TinkerScriptClient(object):
             logger.error(f"Error getting episode buffer: {e}")
             return []
 
-    def auto_sync_train_config_and_start_engine(self, agent_jet_job: AgentJetJob):
+    def auto_sync_train_config_and_start_engine(self, agent_jet_job: AgentJetJob, force_restart=False):
         """
         Automatically sync training configuration and start the engine if needed.
         This checks the current engine status and performs actions accordingly.
+
+        Args:
+            - agent_jet_job: The AgentJetJob configuration to sync.
+            - force_restart: If True, forces a restart of the engine.
         """
+        if force_restart:
+            logger.warning("Force restarting the engine...")
+            self.stop_engine()
+            time.sleep(8)
         current_status = self.get_engine_status()
         if current_status == "ENGINE.OFFLINE":
             logger.info("Engine is OFFLINE. Syncing train config and starting engine...")

@@ -2,7 +2,7 @@
 
 import os
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait, ALL_COMPLETED, FIRST_COMPLETED
 from typing import Dict, List, Literal
 from urllib.parse import quote
 
@@ -59,6 +59,9 @@ class DynamicRolloutManager(BaseRolloutManager):
             if start == -1:
                 print_buf += [f"[finished]:{count} threads"]
         print(f"Rollout progress ({token_gen_per_sec_str}): " + "  //  ".join(print_buf))
+        if "info" in observation_window:
+            print_buf2 = "\t".join(observation_window["info"])
+            print(print_buf2)
 
     def rollout_static(
         self,
@@ -139,7 +142,9 @@ class DynamicRolloutManager(BaseRolloutManager):
         epoch: str,
     ) -> List[BaseContextTracker]:
         """Delegate to dynamic rollout when oversampling is enabled."""
-        if (
+        if self.config.ajet.enable_tinkerscript_mode:
+            return self.rollout_swarm(tasks, mode, epoch)
+        elif (
             mode == "sample"
             and (self.rollout_n != 1)
             and self.config.ajet.rollout.enable_oversample
@@ -457,6 +462,144 @@ class DynamicRolloutManager(BaseRolloutManager):
             #     tracker.current_batch_reward = np.mean(task_group_reward)
 
             return tracker_array
+
+
+
+    def rollout_swarm(  # noqa: C901
+        self,
+        tasks: List[Task],
+        mode: Literal["sample", "validate"],
+        epoch: str,
+        allow_sample_num_change=True,
+        allow_force_stop=True,
+    ) -> List[BaseContextTracker]:
+        """
+        Build a pool of threads to run context trackers in parallel,
+        each thread re-spawn after complete, until reaching conditions to stop.
+        """
+
+        tracker_array: List[BaseContextTracker] = []
+        assert mode != "validate"
+        rollout_n = self.rollout_n
+        n_task = len(tasks)
+        self.current_token_count_time = time.time()
+
+        # initialize observation window
+        observation_window: Dict[str, List[int | bool | str]] = {
+            "info": ["" for _ in range(n_task * rollout_n)],
+            "step": [0 for _ in range(n_task * rollout_n)],
+            "stop": [False for _ in range(n_task * rollout_n)],
+            "token": [0 for _ in range(n_task * rollout_n)],
+        }
+        executor = ThreadPoolExecutor(max_workers=self.max_parallel)
+        futures: List[Future] = []
+        completed_task_id_map_ct: Dict[str, List[BaseContextTracker]] = {}
+
+        # submit initial tasks
+        dummy_task = Task(main_query="dummy task")
+        for task_batch_index in range(n_task):
+            for task_rollout_index in range(rollout_n):
+                task_thread_index = task_batch_index * rollout_n + task_rollout_index
+                future = executor.submit(
+                    self.rollout_env_worker,
+                    task=dummy_task,
+                    task_tag="",
+                    mode=mode,
+                    task_batch_index=task_batch_index,
+                    task_thread_index=task_thread_index,
+                    observation_window=observation_window,
+                )
+                observation_window["info"][task_thread_index] = "1"
+                futures.append(future)
+
+        def enough_sample_stop_condition(completed_task_id_map_ct) -> bool:
+            n = 0
+            for ct_list in completed_task_id_map_ct.values():
+                n += len(ct_list)
+            return (n >= n_task * rollout_n)
+
+        def enough_finished_task_stop_condition(completed_task_id_map_ct) -> bool:
+            n_finish_roll_task = 0
+            for ct_list in completed_task_id_map_ct.values():
+                if len(ct_list) >= rollout_n:
+                    n_finish_roll_task += 1
+            return (n_finish_roll_task >= n_task)
+
+        def enough_non_dummy_task_stop_condition(completed_task_id_map_ct) -> bool:
+            n_finish_roll_task = 0
+            for ct_list in completed_task_id_map_ct.values():
+                task_cmd_reward_array = [
+                    tracker.reward_structure.performance_reward for tracker in ct_list
+                ]
+                if (len(ct_list) >= rollout_n):
+                    all_equal = all(x == task_cmd_reward_array[0] for x in task_cmd_reward_array)
+                    if all_equal: continue
+                    n_finish_roll_task += 1
+            return (n_finish_roll_task >= n_task)
+
+        stop_condition = enough_sample_stop_condition
+
+        def force_stop_all_threads():
+            for k in range(len(observation_window["stop"])):
+                observation_window["stop"][k] = True
+            return
+
+        tic = time.time()
+        while True:
+            # wait for a completed task
+            done_arr, pending_arr = wait(futures, timeout=10, return_when=FIRST_COMPLETED)
+            print(f"Done tasks: {len(done_arr)}, Pending tasks: {len(pending_arr)}")
+            toc = time.time()
+            if (toc - tic) > 8:
+                tic = toc
+                self.step_status_printer(observation_window)
+            # get result
+            for future in done_arr:
+                ct: BaseContextTracker = future.result()
+                if ct.task_id not in completed_task_id_map_ct:
+                    completed_task_id_map_ct[ct.task_id] = [ct]
+                else:
+                    completed_task_id_map_ct[ct.task_id] += [ct]
+            # if meet stop condition
+            meet_stop_condition_after_new_results = stop_condition(completed_task_id_map_ct)
+            if meet_stop_condition_after_new_results:
+                force_stop_all_threads()
+                break
+            else:
+                # re-spawn new tasks for done futures
+                for task_batch_index in range(n_task):
+                    for task_rollout_index in range(rollout_n):
+                        task_thread_index = task_batch_index * rollout_n + task_rollout_index
+                        has_done = (futures[task_thread_index] in done_arr)
+
+                        observation_window["info"][task_thread_index] = str(int(observation_window["info"][task_thread_index]) + 1)
+                        observation_window["stop"][task_thread_index] = False
+                        observation_window["step"][task_thread_index] = 0
+
+                        if has_done:
+                            print(f"Re-spawning thread {task_thread_index}...")
+                            future = executor.submit(
+                                self.rollout_env_worker,
+                                task=dummy_task,
+                                task_tag="",
+                                mode=mode,
+                                task_batch_index=task_batch_index,
+                                task_thread_index=task_thread_index,
+                                observation_window=observation_window,
+                            )
+                            futures[task_thread_index] = future
+
+        # wait for all threads to complete
+        print('Finalizing all threads...')
+        wait(futures, return_when=ALL_COMPLETED)
+
+        # build tracker_array
+        print('Collecting results...')
+        for ct_list in completed_task_id_map_ct.values():
+            tracker_array.extend(ct_list)
+
+        # return all trackers
+        return tracker_array
 
 
 class VerlRolloutManager(DynamicRolloutManager):

@@ -116,22 +116,17 @@ def http_register_episode(config, episode_uuid: str,
         zmq_listen_result_addr=zmq_listen_result_addr,
     )
     # send http request to tinkerscript server to register episode
-    while True:
-        try:
-            response = httpx.post(
-                f"{interchange_http_addr}/register_episode",
-                json=rer.model_dump(),  # 或者 rer.model_dump() 如果使用 Pydantic v2
-                timeout=30
-            )
-            response.raise_for_status()
-            result = response.json()
-            if not result.get('success'):
-                raise RuntimeError(f"Failed to register episode {episode_uuid}")
-            if DEBUG: logger.info(f"Successfully registered episode {episode_uuid}")
-            break
-        except httpx.HTTPError as e:
-            logger.error(f"Error registering episode {episode_uuid}: {e}. Retrying...")
-            time.sleep(5)
+
+    response = httpx.post(
+        f"{interchange_http_addr}/register_episode",
+        json=rer.model_dump(),  # 或者 rer.model_dump() 如果使用 Pydantic v2
+        timeout=30
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not result.get('success'):
+        raise RuntimeError(f"Failed to register episode {episode_uuid}")
+    if DEBUG: logger.info(f"Successfully registered episode {episode_uuid}")
 
     return rer
 

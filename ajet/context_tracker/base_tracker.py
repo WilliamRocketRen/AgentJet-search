@@ -115,8 +115,8 @@ class BaseTracker(object):
 
         self.workflow_task = workflow_task
         self.task_batch_index = self.workflow_task.task_batch_index
-        self.task_tag = self.workflow_task.task_tag
-        self.task_id = self.workflow_task.task_id
+        self.task_tag: str = self.workflow_task.task_tag
+        self.task_id: str = self.workflow_task.task_id
         self.episode_uuid = self.workflow_task.episode_uuid
 
         self.config = config
