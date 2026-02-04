@@ -35,10 +35,10 @@ def parse_args():
         help="verl or trinity or debug",
     )
     parser.add_argument(
-        "--tinkerscript-server",
+        "--swarm-server",
         action="store_true",
         default=False,
-        help="Enable TinkerScript server mode",
+        help="Enable Swarm server mode",
     )
     parser.add_argument(
         "--conf",
@@ -146,12 +146,12 @@ def check_model_file_exists(exp_config):
         assert os.path.exists(model_path), f"Model path {model_path} does not exist. Please check your configuration."
 
 
-def start_tinkerscript_server(env, config):
+def start_swarm_server(env, config):
     config = dict_to_namespace(config)
-    assert config.ajet.enable_tinkerscript_mode, \
-        "Please enable_tinkerscript_mode in config to start tinkerscript server."
+    assert config.ajet.enable_swarm_mode, \
+        "Please enable_swarm_mode in config to start swarm server."
     assert config.ajet.enable_experimental_interchange_server, \
-        "Please enable_experimental_interchange_server in config to start tinkerscript server."
+        "Please enable_experimental_interchange_server in config to start swarm server."
     from ajet.tuner_lib.weight_tuner.experimental.as_oai_model_server import start_interchange_server
     start_interchange_server(config, blocking=True, env=env)
 
@@ -191,9 +191,9 @@ def main():
     # read configuration from yaml
     exp_config = None
     exp_dir = args.exp_dir or "saved_experiments"
-    if args.tinkerscript_server and (not args.conf):
+    if args.swarm_server and (not args.conf):
         args.conf = os.path.abspath(os.path.join(os.path.dirname(__file__), "default_config/ajet_ts_default.yaml"))
-        assert os.path.exists(args.conf), "Please provide a valid config file for tinkerscript server mode."
+        assert os.path.exists(args.conf), "Please provide a valid config file for swarm server mode."
     if args.conf:
         yaml_path = args.conf
         (
@@ -206,8 +206,8 @@ def main():
     # setup environment variables
     env, exp_config = setup_environment_vars(args, exp_config, main_yaml_fp)
 
-    if args.tinkerscript_server:
-        start_tinkerscript_server(env, exp_config)
+    if args.swarm_server:
+        start_swarm_server(env, exp_config)
         return
 
     if args.with_ray:

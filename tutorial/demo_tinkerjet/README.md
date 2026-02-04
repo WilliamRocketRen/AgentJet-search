@@ -1,20 +1,20 @@
-# TinkerScript
+# Swarm
 
 
-TinkerScript is an experimental component of AgentJet,
+Swarm is an experimental component of AgentJet,
 allowing users to
 - run, debug and train **full-weight** LLM model behind user-defined LLM workflows in **machines without GPU**.
 
-Similar to Tinker & Open-Tinker, the basic idea behind TinkerScript is to:
+Similar to Tinker & Open-Tinker, the basic idea behind Swarm is to:
 - use remote (or cloud) GPU machine(s) as computation media.
 
-However, TinkerScript goes even further on this path:
+However, Swarm goes even further on this path:
 
 - Users only need to write and run their agents in a big `while` loop (e.g., in their laptop), and provide samples generated in this process.
 
-- TinkerScript will take care of everything else.
+- Swarm will take care of everything else.
 
-- TinkerScript trains **full-weight** LLM model instead of lora.
+- Swarm trains **full-weight** LLM model instead of lora.
 
 - Upon the termination of the training session, user can call `download_tuned_model` to download tuned LLM(s).
 
@@ -61,4 +61,4 @@ tinkerjet_remote.close()
 - AgentJet are not able to explicitly distinguish different agents in multi-agent scenario.
   But **do not worry**, AgentJet will still try its best to recognize shards of llm timelines and merge them behind the curtain, automatically.
 
-- TinkerScript does not support prompt tuning.
+- Swarm does not support prompt tuning.

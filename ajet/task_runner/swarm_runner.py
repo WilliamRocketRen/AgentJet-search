@@ -21,7 +21,7 @@ DEBUG = True
 context = zmq.Context()
 atexit.register(context.term)
 
-class TinkerScriptRunner(BaseAgentRunner):
+class SwarmRunner(BaseAgentRunner):
 
     def register_episode_and_wait_output(
         self,
@@ -33,7 +33,7 @@ class TinkerScriptRunner(BaseAgentRunner):
         should_exit_soft:Callable,
         should_exit_hard:Callable
     ) -> WorkflowOutput | None:
-        """Register the episode as ready in the TinkerScript data interchange center."""
+        """Register the episode as ready in the Swarm data interchange center."""
         # parse episode_uuid, openai_base_url, openai_api_key
         zmq_listen_result_addr, ipc_path = get_zmq_socket(self.config, episode_uuid, tag="workflow")
         success = http_register_episode(
@@ -63,11 +63,11 @@ class TinkerScriptRunner(BaseAgentRunner):
 
             while True:
                 # <wait for 1/2>:
-                #   <from_sourcefile>: ajet/tuner_lib/weight_tuner/experimental/as_tinkerscript_server.py
+                #   <from_sourcefile>: ajet/tuner_lib/weight_tuner/experimental/as_swarm_server.py
                 #   <from_code>: socket.send_string(workflow_output.model_dump_json())
                 #   <expect>: workflow_output: WorkflowOutput
                 # <wait for 2/2>:
-                #   <from_sourcefile>: ajet/tuner_lib/weight_tuner/experimental/as_tinkerscript_server.py
+                #   <from_sourcefile>: ajet/tuner_lib/weight_tuner/experimental/as_swarm_server.py
                 #   <from_code>: socket.send_string("RUNNER.SPECIAL.RESET_CONTEXT_TRACKER")
                 #   <expect>: "RUNNER.SPECIAL.RESET_CONTEXT_TRACKER"
                 try:
@@ -77,12 +77,6 @@ class TinkerScriptRunner(BaseAgentRunner):
                         logger.warning(f'{episode_uuid} Exiting workflow due to should_exit_hard signal.')
                         context_tracker.reset()
                         raise SwarmReceiveAbortException(f"Episode {episode_uuid} aborted due to system exit.")
-                    elif should_exit_soft():
-                        has_claimed = is_episode_claimed(self.config, episode_uuid)
-                        if not has_claimed:
-                            raise SwarmReceiveAbortException(f"Episode {episode_uuid} aborted due to system exit.")
-                        else:
-                            continue
                     else:
                         continue
                 # process messages
@@ -127,7 +121,7 @@ class TinkerScriptRunner(BaseAgentRunner):
             workflow_task=workflow_task,
         )
 
-        should_exit_soft = hooks['should_interrupt_fn']
+        should_exit_soft = hooks['should_interrupt_soft_fn']
         should_exit_hard = hooks['should_interrupt_hard_fn']
 
         if should_exit_soft() or should_exit_hard():
@@ -180,7 +174,7 @@ class TinkerScriptRunner(BaseAgentRunner):
                 workflow_output.is_success,
             )
         else:
-            raise ValueError("workflow_output.reward is None in TinkerScriptRunner, this is currently not allowed.")
+            raise ValueError("workflow_output.reward is None in SwarmRunner, this is currently not allowed.")
 
         # release gym_env
         workflow_task.gym_env = None  # clear gym env client reference to avoid serialization issue

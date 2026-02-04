@@ -20,7 +20,7 @@ from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import (
 )
 
 
-class TinkerScriptClient(object):
+class SwarmClient(object):
 
     def __init__(self, server_url: str):
         self.server_url = server_url
@@ -62,6 +62,7 @@ class TinkerScriptClient(object):
                 else:
                     need_wait_scenarios =[
                         "Engine is syncing weights",
+                        "Engine is in post-rolling phase",
                         "No available episodes to claim.",
                     ]
                     if any(scenario in data.fail_cause for scenario in need_wait_scenarios):
@@ -140,7 +141,7 @@ class TinkerScriptClient(object):
 
     def sync_train_config(self, agent_jet_job: AgentJetJob):
         """
-        Sync training configuration to the TinkerScript server.
+        Sync training configuration to the Swarm server.
         This sends the AgentJetJob config as YAML to the remote server.
         """
         # try get init status
@@ -160,14 +161,14 @@ class TinkerScriptClient(object):
                 timeout=30
             )
             resp.raise_for_status()
-            logger.info("Synced train config to TinkerScript server")
+            logger.info("Synced train config to Swarm server")
         except Exception as e:
             logger.error(f"Error syncing train config: {e}")
             raise
 
     def start_engine(self):
         """
-        Start the training engine on the TinkerScript server.
+        Start the training engine on the Swarm server.
         This triggers the server to begin the training process.
         Polls until engine status is "ENGINE.ROLLING".
         """
@@ -186,7 +187,7 @@ class TinkerScriptClient(object):
             resp.raise_for_status()
             result = resp.json()
             if result.get("success"):
-                logger.info("Successfully started training engine on TinkerScript server")
+                logger.info("Successfully started training engine on Swarm server")
             else:
                 logger.error("Failed to start training engine")
                 raise RuntimeError("Failed to start training engine")
@@ -299,6 +300,8 @@ class TinkerScriptClient(object):
             self.start_engine()
         elif current_status == "ENGINE.ROLLING":
             logger.info("Engine is already ROLLING. No action needed.")
+        elif current_status == "ENGINE.ROLLING_POST":
+            logger.info("Engine is already ROLLING. No action needed.")
         elif current_status == "ENGINE.BOOTING":
             logger.info("Engine is BOOTING. Waiting until it becomes ROLLING...")
             self._wait_until_status_change_to(desired_status="ENGINE.ROLLING")
@@ -312,7 +315,7 @@ class TinkerScriptClient(object):
 
     def stop_engine(self):
         """
-        Stop the training engine on the TinkerScript server.
+        Stop the training engine on the Swarm server.
         This triggers the server to stop the training process.
         """
         current_status = self.get_engine_status()
@@ -329,7 +332,7 @@ class TinkerScriptClient(object):
             resp.raise_for_status()
             result = resp.json()
             if result.get("success"):
-                logger.info("Successfully stopped training engine on TinkerScript server")
+                logger.info("Successfully stopped training engine on Swarm server")
             else:
                 logger.error("Failed to stop training engine")
             self._wait_until_status_change_to(desired_status="ENGINE.OFFLINE")

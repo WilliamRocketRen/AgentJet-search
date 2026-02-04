@@ -1,12 +1,12 @@
-# TinkerScript Design Blueprint
+# Swarm Design Blueprint
 
-TinkerScript represents a client-server architecture designed to decouple the **Training Loop** (Server-side) from the **Rollout Execution** (Client-side). This allows for distributed, flexible, and potentially remote execution of agent rollouts (inference + reward calculation) while centralizing the model training and weight updates.
+Swarm represents a client-server architecture designed to decouple the **Training Loop** (Server-side) from the **Rollout Execution** (Client-side). This allows for distributed, flexible, and potentially remote execution of agent rollouts (inference + reward calculation) while centralizing the model training and weight updates.
 
 ## 1. System Architecture
 
 The system consists of three main components:
 
-### A. TinkerScript Server (The Trainer)
+### A. Swarm Server (The Trainer)
 *   **Role**: Manages the training lifecycle, generates tasks (episodes), serves the model (LLM) API, and updates model weights.
 *   **Technology**: Python, FastAPI, ZeroMQ (IPC/TCP), Shared Memory (Multiprocessing).
 *   **Location**: Runs on the GPU cluster/Training node.
@@ -15,7 +15,7 @@ The system consists of three main components:
     *   Exposes an HTTP API for external clients to claim tasks and submit results.
     *   Acts as a bridge between the HTTP world and the internal ZeroMQ-based training pipeline.
 
-### B. TinkerScript Client (The User Script)
+### B. Swarm Client (The User Script)
 *   **Role**: Fetches tasks, runs the agent logic, computes rewards, and reports back.
 *   **Technology**: Python (Requests/HTTPX).
 *   **Location**: Can run locally, on a separate CPU cluster, or even a different cloud environment.
@@ -103,11 +103,11 @@ class EpisodeStatus:
 
 ## 4. Key Configurations
 
-From `ajet_tinkerscript_default.yaml`, we see how this mode is activated:
+From `ajet_swarm_default.yaml`, we see how this mode is activated:
 
 ```yaml
 experiment_dir: "auto"
-enable_tinkerscript_mode: True  # Activates the HTTP API Server
+enable_swarm_mode: True  # Activates the HTTP API Server
 interchange_server:
   interchange_method: 'ipc'     # Internal communication (ZeroMQ)
   interchange_server_port: 10086 # HTTP API Port

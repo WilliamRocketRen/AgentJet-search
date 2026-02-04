@@ -41,7 +41,7 @@ def ep_key(episode_uuid: str) -> str:
     return f"episodes-{episode_uuid}"
 
 
-def register_enable_tinkerscript_mode_routes(
+def register_enable_swarm_mode_routes(
         app,
         zmq_context,
         shared_mem_dict:DictProxy,
@@ -59,7 +59,7 @@ def register_enable_tinkerscript_mode_routes(
     # ---------------------------------  claimed -> unclaimed ----------------------------------------
     # ------------------------------------------------------------------------------------------------
 
-    def find_claimed_episodes_that_need_to_be_unclaimed() -> List[str]:
+    async def find_claimed_episodes_that_need_to_be_unclaimed() -> List[str]:
         result = []
         current_time = time.time()
 
@@ -71,11 +71,11 @@ def register_enable_tinkerscript_mode_routes(
                         result.append(es.episode_uuid)
 
         for episode_uuid in result:
-            _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
+            await _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
 
         return result
 
-    def _context_tracker_reset(episode_uuid, shared_mem_dict):
+    def _context_tracker_reset_blocking(episode_uuid, shared_mem_dict):  # must async
         # send message to context tracker
         assert 'episodes' in shared_mem_dict
         zmq_addr = shared_mem_dict[ep_key(episode_uuid)].zmq_listen_result_addr
@@ -84,7 +84,7 @@ def register_enable_tinkerscript_mode_routes(
         socket.connect(zmq_addr)
 
         # <send to>
-        #   <to_sourcefile>: ajet/task_runner/tinkerscript_runner.py
+        #   <to_sourcefile>: ajet/task_runner/swarm_runner.py
         #   <to_code>: message = zmq_socket.recv_string()
         socket.send_string("RUNNER.SPECIAL.RESET_CONTEXT_TRACKER")
 
@@ -93,7 +93,7 @@ def register_enable_tinkerscript_mode_routes(
             try:
                 if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | recv_string begin.")
                 # <wait for>:
-                #   <from_sourcefile>: ajet/task_runner/tinkerscript_runner.py
+                #   <from_sourcefile>: ajet/task_runner/swarm_runner.py
                 #   <from_code>: zmq_socket.send_string("ack")
                 #   <expect>: "ack"
                 socket.recv_string()
@@ -106,23 +106,24 @@ def register_enable_tinkerscript_mode_routes(
                     raise RuntimeError("Engine is no longer rolling, aborting wait for ack.")
                 continue
 
-    def _revert_episode_to_unclaimed(episode_uuid: str, shared_mem_dict, shared_mem_dict_lock):
+    async def _revert_episode_to_unclaimed(episode_uuid: str, shared_mem_dict, shared_mem_dict_lock):
         # check status again, because other thread may have changed it
         if shared_mem_dict[ep_key(episode_uuid)].episode_status != "claimed":
             return
 
-        with shared_mem_dict_lock:
-            # reset context tracker
-            _context_tracker_reset(episode_uuid, shared_mem_dict)
+        # reset context tracker
+        # _context_tracker_reset_blocking(episode_uuid, shared_mem_dict)   # must async
+        await asyncio.to_thread(_context_tracker_reset_blocking, episode_uuid, shared_mem_dict)
 
-            # revert
-            logger.warning(f"Reverting episode {episode_uuid} to unclaimed due to client timeout.")
-            if ep_key(episode_uuid) in shared_mem_dict:
-                es:EpisodeStatus = shared_mem_dict[ep_key(episode_uuid)]
-                es.episode_status = "registered"
-                es.client_uuid = ""
-                es.latest_activity_timestamp = time.time()
-                es.allow_discard_timeout = -1
+        # revert
+        logger.warning(f"Reverting episode {episode_uuid} to unclaimed due to client timeout.")
+        if ep_key(episode_uuid) in shared_mem_dict:
+            es:EpisodeStatus = shared_mem_dict[ep_key(episode_uuid)]
+            es.episode_status = "registered"
+            es.client_uuid = ""
+            es.latest_activity_timestamp = time.time()
+            es.allow_discard_timeout = -1
+            with shared_mem_dict_lock:
                 shared_mem_dict[ep_key(episode_uuid)] = es
                 if episode_uuid in shared_mem_dict['unclaimed_episodes']:
                     pass
@@ -145,11 +146,11 @@ def register_enable_tinkerscript_mode_routes(
     # -------------------------- return workflow output ------------------------------------
     # --------------------------------------------------------------------------------------
 
-    def _register_final_episode_output(episode_uuid, workflow_output, shared_mem_dict, shared_mem_dict_lock):
+    def _register_final_episode_output_blocking(episode_uuid, workflow_output, shared_mem_dict, shared_mem_dict_lock):   # must async
 
         # begin send workflow_output
         zmq_addr = shared_mem_dict[ep_key(episode_uuid)].zmq_listen_result_addr
-        if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | Received new chat completion request (inside thread)")
+        if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | Received new chat completion request")
         socket = zmq_context.socket(zmq.REQ)
         socket.setsockopt(zmq.RCVTIMEO, RCVTIMEO)  # 2 seconds recv timeout
         socket.connect(zmq_addr)
@@ -161,7 +162,7 @@ def register_enable_tinkerscript_mode_routes(
             try:
                 if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | recv_string begin.")
                 # <wait for>:
-                #   <from_sourcefile>: ajet/task_runner/tinkerscript_runner.py
+                #   <from_sourcefile>: ajet/task_runner/swarm_runner.py
                 #   <from_code>: zmq_socket.send_string("ack")
                 #   <expect>: "ack"
                 socket.recv_string()
@@ -187,7 +188,7 @@ def register_enable_tinkerscript_mode_routes(
     async def register_episode_ready_listener():
         while True:
             await asyncio.sleep(10)  # check every 10 seconds
-            find_claimed_episodes_that_need_to_be_unclaimed()
+            await find_claimed_episodes_that_need_to_be_unclaimed()
             read_all_episode_status()
 
     def read_all_episode_status() -> Optional[EpisodeStatus]:
@@ -500,11 +501,12 @@ def register_enable_tinkerscript_mode_routes(
         episode_type = shared_mem_dict[ep_key(episode_uuid)].episode_type
 
         if episode_type == "train":
-            _register_final_episode_output(episode_uuid, workflow_output, shared_mem_dict, shared_mem_dict_lock)
+            # _register_final_episode_output_blocking(episode_uuid, workflow_output, shared_mem_dict, shared_mem_dict_lock)    # must async
+            await asyncio.to_thread(_register_final_episode_output_blocking, episode_uuid, workflow_output, shared_mem_dict, shared_mem_dict_lock)
 
         elif episode_type == "eval":
             if engine_status in ["ENGINE.ROLLING"]:
-                _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
+                await _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
             else:
                 _delete_episode_record(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
 
@@ -539,7 +541,7 @@ def register_enable_tinkerscript_mode_routes(
             return EndEpisodeResponse(success=True)
 
         if engine_status in ["ENGINE.ROLLING"]:
-            _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
+            await _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
         else:
             _delete_episode_record(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
 
@@ -563,7 +565,12 @@ def register_enable_tinkerscript_mode_routes(
         engine_status = shared_mem_dict['engine_status']
         if engine_status not in ["ENGINE.ROLLING", "ENGINE.ROLLING_POST"]:
             return BoolResponse(success=False)
-        if shared_mem_dict[ep_key(req.episode_uuid)].episode_status == "claimed":
+        if ep_key(req.episode_uuid) not in shared_mem_dict:
+            return BoolResponse(success=False)
+        es = shared_mem_dict[ep_key(req.episode_uuid)]
+        if not es:
+            return BoolResponse(success=False)
+        if es.episode_status == "claimed":
             return BoolResponse(success=True)
         else:
             return BoolResponse(success=False)

@@ -458,7 +458,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
 
     def _update_interchange_server_status_flag(self, status: str):
         if self.config.ajet.enable_experimental_interchange_server:
-            if self.config.ajet.enable_tinkerscript_mode:
+            if self.config.ajet.enable_swarm_mode:
                 from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import http_change_engine_status
                 http_change_engine_status(self.config, status)
 
@@ -493,7 +493,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
 
         # perform validation before training
         # currently, we only support validation using the reward_function.
-        if (self.val_reward_fn is not None) and (self.config.trainer.get("val_before_train", True)) and (not self.config.ajet.enable_tinkerscript_mode):
+        if (self.val_reward_fn is not None) and (self.config.trainer.get("val_before_train", True)) and (not self.config.ajet.enable_swarm_mode):
             val_metrics = self._validate()
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
@@ -651,7 +651,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                         [str(uuid.uuid4()) for _ in range(len(batch.batch))],
                         dtype=object,
                     )
-                    discard_original_batch = self.config.ajet.enable_tinkerscript_mode
+                    discard_original_batch = self.config.ajet.enable_swarm_mode
                     batch = union_gen_batch_via_task_id(tasks, batch, gen_batch_output, discard_original_batch)
                     batch.batch["response_mask"] = compute_response_mask(batch)
 
@@ -784,7 +784,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                         self.val_reward_fn is not None
                         and self.config.trainer.test_freq > 0
                         and (is_last_step or self.global_steps % self.config.trainer.test_freq == 0)
-                        and (not self.config.ajet.enable_tinkerscript_mode)
+                        and (not self.config.ajet.enable_swarm_mode)
                     ):
                         with marked_timer("testing", timing_raw, color="green"):
                             val_metrics: dict = self._validate()
@@ -958,7 +958,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                 dtype=object,
             )
             tasks = tasks[: len(main_val_dataset)]
-            discard_original_batch = self.config.ajet.enable_tinkerscript_mode
+            discard_original_batch = self.config.ajet.enable_swarm_mode
             test_batch = union_gen_batch_via_task_id(tasks, test_batch, test_output_gen_batch, discard_original_batch)
             # test_batch = test_batch.union(test_output_gen_batch)
             test_batch.meta_info["validate"] = True

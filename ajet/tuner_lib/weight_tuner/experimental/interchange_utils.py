@@ -106,6 +106,7 @@ def http_change_engine_status(config, new_status: str):
 
 
 def is_episode_claimed(config, episode_uuid: str) -> bool:
+    # TODO: add cache to reduce communication overhead
     resp = httpx.post(
         f"{get_interchange_server_url(config)}/is_episode_claimed",
         json={"client_uuid": "", "episode_uuid": episode_uuid},
@@ -136,7 +137,7 @@ def http_register_episode(config,
         openai_api_key=openai_api_key,
         zmq_listen_result_addr=zmq_listen_result_addr,
     )
-    # send http request to tinkerscript server to register episode
+    # send http request to swarm server to register episode
     response = httpx.post(
         f"{interchange_http_addr}/register_episode",
         json=rer.model_dump(),  # 或者 rer.model_dump() 如果使用 Pydantic v2

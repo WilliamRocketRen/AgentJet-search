@@ -25,7 +25,7 @@ from .trans_reward import TranslationQualityGrader, build_translation_quality_me
 LOCAL_DATASET_PATH = "/mnt/data_cpfs/qingxu.fu/agentjet/agentjet/tmp/arxiv_papers/train.parquet"
 
 
-# Handshake with tinkerscript remote, then send training param to tinkerscript remote (such as model to be trained, algorithm, etc)
+# Handshake with swarm remote, then send training param to swarm remote (such as model to be trained, algorithm, etc)
 dataset = RouterTaskReader(
     reader_type = "huggingface_dat_repo",
     reader_config = AjetTaskReader(

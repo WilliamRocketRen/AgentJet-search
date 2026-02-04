@@ -282,8 +282,8 @@ ajet:
 
 
   # the experimental ZeroMQ interchange server feature that allows `tuner.as_oai_baseurl_apikey` feature
-  enable_tinkerscript_mode: False
-  # both tinkerscript / oai share the same interchange server
+  enable_swarm_mode: False
+  # both swarm / oai share the same interchange server
   enable_experimental_interchange_server: False
   # interchange server configuration
   interchange_server:
@@ -292,7 +292,7 @@ ajet:
     num_fastapi_process: 2  # 1, 2 or 4 is fine
     max_fastapi_threads: 512  # 64 or 128 is fine
     max_inference_tracker_threads: 64 # recommend to be equal to `ajet.rollout.max_env_worker`
-    already_started: False # do not edit, used by `tinkerscript`
+    already_started: False # do not edit, used by `swarm`
 
 
   task_runner:

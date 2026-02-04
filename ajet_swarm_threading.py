@@ -4,26 +4,25 @@ import threading
 import requests
 from loguru import logger
 from textwrap import dedent
-from ajet import WorkflowOutput
-from ajet.schema.task import Task
+from ajet.schema.task import Task, WorkflowOutput
 from ajet.copilot.job import AgentJetJob
 from ajet.task_reader import RouterTaskReader
 from ajet.utils.retry import retry_with_backoff
 from ajet.default_config.ajet_default import AjetTaskReader, HuggingfaceDatRepo
 from ajet.tuner_lib.weight_tuner.as_oai_baseurl_apikey import OpenaiBaseUrlAndApiKey
-from ajet.tuner_lib.weight_tuner.experimental.as_tinkerscript_client import TinkerScriptClient
+from ajet.tuner_lib.weight_tuner.experimental.as_swarm_client import SwarmClient
 from concurrent.futures import ThreadPoolExecutor
 
 # --------- configurations that take effect locally -------------
 LOCAL_GRPO_N = 4  # grpo group size
 LOCAL_NUM_EPOCH = 10000
 LOCAL_NUM_EPOCH = 1
-LOCAL_MAX_PARALLEL = 8
+LOCAL_MAX_PARALLEL = 64
 LOCAL_DATASET_PATH = "/mnt/data_cpfs/qingxu.fu/dataset/openai/gsm8k/main"
-REMOTE_TINKERJET_URL = "http://localhost:10086" # Change to your tinkerscript remote url
+REMOTE_SWARM_URL = "http://localhost:10086" # Change to your swarm remote url
 
 # --------- configurations that take effect remotely -------------
-REMOTE_BATCH_SIZE = 4
+REMOTE_BATCH_SIZE = 32
 REMOTE_ALLOCATE_GPU_PER_NODE = 4
 REMOTE_TRAIN_MODEL_01 = '/mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen2.5-7B-Instruct'
 
@@ -35,7 +34,7 @@ class WeightUpdatedHalfway(Exception):
 
 def main():
 
-    # Handshake with tinkerscript remote, then send training param to tinkerscript remote (such as model to be trained, algorithm, etc)
+    # Handshake with swarm remote, then send training param to swarm remote (such as model to be trained, algorithm, etc)
     dataset = RouterTaskReader(
         reader_type = "huggingface_dat_repo",
         reader_config = AjetTaskReader(
@@ -45,17 +44,17 @@ def main():
         )
     )
 
-    # # Hand shake with remote tinkerscript server
-    tinkerscript_remote = TinkerScriptClient(REMOTE_TINKERJET_URL)
-    # tinkerscript_remote.auto_sync_train_config_and_start_engine(
-    #     AgentJetJob(
-    #         algorithm="grpo",
-    #         n_gpu=REMOTE_ALLOCATE_GPU_PER_NODE,
-    #         model=REMOTE_TRAIN_MODEL_01,
-    #         batch_size=REMOTE_BATCH_SIZE,
-    #         grpo_n=LOCAL_GRPO_N,
-    #     )
-    # )
+    # # Hand shake with remote swarm server
+    swarm_remote = SwarmClient(REMOTE_SWARM_URL)
+    swarm_remote.auto_sync_train_config_and_start_engine(
+        AgentJetJob(
+            algorithm="grpo",
+            n_gpu=REMOTE_ALLOCATE_GPU_PER_NODE,
+            model=REMOTE_TRAIN_MODEL_01,
+            batch_size=REMOTE_BATCH_SIZE,
+            grpo_n=LOCAL_GRPO_N,
+        )
+    )
 
     def rollout(task):
         group_reward = []
@@ -63,11 +62,11 @@ def main():
             for _ in range(LOCAL_GRPO_N):
                 try:
                     # begin episode
-                    episode_uuid, api_baseurl_key = tinkerscript_remote.begin_episode()
+                    episode_uuid, api_baseurl_key = swarm_remote.begin_episode()
                     # execute agent
                     workflow_output = execute_agent(task, api_baseurl_key)
-                    # report output back to tinkerscript remote
-                    tinkerscript_remote.end_episode(task, episode_uuid, workflow_output)
+                    # report output back to swarm remote
+                    swarm_remote.end_episode(task, episode_uuid, workflow_output)
                     # collect reward
                     group_reward.append(workflow_output.reward)
                 except Exception as e:
@@ -81,7 +80,7 @@ def main():
     for i, task in enumerate(dataset.get_training_tasks()):
         task_batch += [task]
 
-        if len(task_batch) == 3*REMOTE_BATCH_SIZE:
+        if len(task_batch) == REMOTE_BATCH_SIZE:
             print('*********** beginning a new batch of tasks... ***********')
             with ThreadPoolExecutor(max_workers=LOCAL_MAX_PARALLEL) as executor:
                 for task in task_batch:
@@ -89,7 +88,7 @@ def main():
             executor.shutdown(wait=True)
             task_batch = []
             print('*********** tasks completed, wait a minute... ***********')
-            time.sleep(60)
+            time.sleep(3)
 
 
     return None

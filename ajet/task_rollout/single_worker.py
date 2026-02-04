@@ -15,7 +15,7 @@ from ajet.schema.task import Task, WorkflowTask
 from ajet.task_rollout.async_llm_bridge import AsyncLlmBridge
 from ajet.task_rollout.resource_keeper import ResourceKeeper
 from ajet.task_runner.general_runner import GeneralRunner
-from ajet.task_runner.tinkerscript_runner import TinkerScriptRunner
+from ajet.task_runner.swarm_runner import SwarmRunner
 from ajet.utils.retry import retry_with_backoff
 from ajet.utils.retry import SwarmReceiveAbortException
 from ajet.utils.sample import get_sample_params
@@ -64,7 +64,7 @@ class BaseRolloutManager:
         assert isinstance(self.pad_token_id, int), "pad_token_id must be an integer"
         self.current_token = 0
         self.current_global_steps: int | str = "NA"
-        self.enable_tinkerscript_mode = config.ajet.enable_tinkerscript_mode
+        self.enable_swarm_mode = config.ajet.enable_swarm_mode
         self.async_llm_bridge = AsyncLlmBridge(
             config=config,
             async_rollout_manager=async_rollout_manager,
@@ -116,8 +116,8 @@ class BaseRolloutManager:
         with ResourceKeeper(workflow_task, config=self.config) as resource_keeper:
             try:
                 workflow_task = resource_keeper.prepare()
-                if self.enable_tinkerscript_mode:
-                    agent_runner = TinkerScriptRunner(
+                if self.enable_swarm_mode:
+                    agent_runner = SwarmRunner(
                         llm_inference_fn=llm_inference_fn, tokenizer=self.tokenizer, config=self.config
                     )
                 else:

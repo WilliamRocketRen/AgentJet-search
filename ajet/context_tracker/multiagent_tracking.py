@@ -48,14 +48,14 @@ class MultiAgentContextTracker(BaseContextTracker):
         self,
         tokenizer: PreTrainedTokenizer,
         config,
-        should_interrupt_fn,
+        should_interrupt_soft_fn,
         should_interrupt_hard_fn,
         generated_token_callback_fn,
         **kwargs,
     ):
         super().__init__(config, tokenizer, **kwargs)
         self.tokenizer = tokenizer
-        self.should_interrupt_fn = should_interrupt_fn
+        self.should_interrupt_soft_fn = should_interrupt_soft_fn
         self.should_interrupt_hard_fn = should_interrupt_hard_fn
         self.generated_token_callback_fn = generated_token_callback_fn
         self.context_overflow = False
@@ -601,7 +601,7 @@ class MultiAgentContextTracker(BaseContextTracker):
             token_overflow = False
         else:
             token_overflow = True
-        if self.should_interrupt_fn():
+        if self.should_interrupt_soft_fn():
             ret = (False, token_overflow, "externally_interrupted")
         elif self.already_mad_flag and self.config.ajet.rollout.agent_madness_termination:
             ret = (False, token_overflow, "already_mad")

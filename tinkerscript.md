@@ -1,4 +1,4 @@
-# TinkerScript Design Blueprint / TinkerScript 设计蓝图
+# Swarm Design Blueprint / Swarm 设计蓝图
 
 [English](#english-version) | [中文](#chinese-version)
 
@@ -8,20 +8,20 @@
 ## 🇬🇧 English Version
 
 ### 1. Overview
-**TinkerScript** is an experimental component of AgentJet designed to decouple the **Training Logic** from the **Agent Execution Logic**. It allows users to train **full-weight LLM models** on machines without GPUs (e.g., a laptop) by offloading the actual model computation to a remote GPU server.
+**Swarm** is an experimental component of AgentJet designed to decouple the **Training Logic** from the **Agent Execution Logic**. It allows users to train **full-weight LLM models** on machines without GPUs (e.g., a laptop) by offloading the actual model computation to a remote GPU server.
 
-Unlike traditional setups where the user code must run inside the training cluster, TinkerScript allows you to verify and run your agent logic locally while the heavy lifting (training & inference) happens remotely.
+Unlike traditional setups where the user code must run inside the training cluster, Swarm allows you to verify and run your agent logic locally while the heavy lifting (training & inference) happens remotely.
 
 
 >
-> Relationship between **TinkerScript** and **Tinker**:
+> Relationship between **Swarm** and **Tinker**:
 >
-> **No relationship at all** (just like **JavaScript** and **Java**). **TinkerScript** is open-source and free. **Tinker** is close-source and not free.
+> **No relationship at all** (just like **JavaScript** and **Java**). **Swarm** is open-source and free. **Tinker** is close-source and not free.
 
 
-## Tinker 与 AgentJet-TinkerScript 对比表
+## Tinker 与 AgentJet-Swarm 对比表
 
-| 特征 | Tinker | AgentJet-TinkerScript |
+| 特征 | Tinker | AgentJet-Swarm |
 |------|--------|--------------|
 | **开源性质** | ❌ 闭源 | **✅ 开源免费** |
 | **收费模式** | 付费服务 | **✅ 完全免费** |
@@ -41,13 +41,13 @@ Unlike traditional setups where the user code must run inside the training clust
 
 ### 2. Core Architecture
 
-The system involves two main parties: the **TinkerScript Server** (running on the GPU cluster) and the **TinkerScript Client** (running on your local machine).
+The system involves two main parties: the **Swarm Server** (running on the GPU cluster) and the **Swarm Client** (running on your local machine).
 
 ```mermaid
 graph TD
     subgraph "GPU Cluster (Server Side)"
         TrainingLoop["Training Loop (AgentJet/GRPO)"]
-        TSS["TinkerScript Server (FastAPI)"]
+        TSS["Swarm Server (FastAPI)"]
         ZMQ["ZeroMQ / IPC"]
         SharedMem[("Shared Memory")]
         LLM["LLM Engine (vLLM/SGLang)"]

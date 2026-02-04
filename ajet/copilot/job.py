@@ -45,11 +45,11 @@ class AgentJetJob:
         n_gpu_for_infer: int | None = None, # only for trinity backbone
         grpo_n: int = 8,
         batch_size: int = 32,
-        tinkerscript_mode: bool = True,
+        swarm_mode: bool = True,
         *kwargs,
     ) -> None:
         self.backbone = backbone
-        if tinkerscript_mode:
+        if swarm_mode:
             default_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', "default_config/ajet_ts_default.yaml"))
         else:
             default_yaml = None

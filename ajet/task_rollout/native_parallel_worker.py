@@ -144,7 +144,7 @@ class DynamicRolloutManager(BaseRolloutManager):
         epoch: str,
     ) -> List[BaseContextTracker]:
         """Delegate to dynamic rollout when oversampling is enabled."""
-        if self.config.ajet.enable_tinkerscript_mode:
+        if self.config.ajet.enable_swarm_mode:
             return self.rollout_swarm(tasks, mode, epoch)
         elif (
             mode == "sample"

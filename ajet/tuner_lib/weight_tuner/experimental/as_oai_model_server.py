@@ -68,7 +68,7 @@ atexit.register(context.term)
 
 
 
-def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shared_mem_dict=None, shared_mem_dict_lock=None) -> Tuple[FastAPI, Optional[Coroutine]]:
+def get_app(max_fastapi_threads: int = 512, enable_swarm_mode=False, shared_mem_dict=None, shared_mem_dict_lock=None) -> Tuple[FastAPI, Optional[Coroutine]]:
 
 
     @asynccontextmanager
@@ -105,7 +105,7 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
                 break
             except zmq.Again as e:
                 # check whether server is still in rolling status
-                if enable_tinkerscript_mode:
+                if enable_swarm_mode:
                     assert shared_mem_dict is not None
                     if shared_mem_dict['engine_status'] not in ["ENGINE.ROLLING", "ENGINE.ROLLING_POST"]:
                         raise HTTPException(status_code=404, detail="The server is not in ENGINE.ROLLING status, cannot accept new requests.")
@@ -163,9 +163,9 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
         # Create timeline UUID
         timeline_uuid = uuid.uuid4().hex
 
-        # enable_tinkerscript_mode
-        if enable_tinkerscript_mode:
-            from ajet.tuner_lib.weight_tuner.experimental.as_tinkerscript_server import ep_key
+        # enable_swarm_mode
+        if enable_swarm_mode:
+            from ajet.tuner_lib.weight_tuner.experimental.as_swarm_server import ep_key
             assert shared_mem_dict is not None
             assert shared_mem_dict_lock is not None
 
@@ -195,11 +195,11 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
         return await loop.run_in_executor(request.app.state.executor, _begin_handle_chat_completion, episode_address, int_req, episode_uuid)
 
 
-    if enable_tinkerscript_mode:
-        from ajet.tuner_lib.weight_tuner.experimental.as_tinkerscript_server import register_enable_tinkerscript_mode_routes
-        assert shared_mem_dict is not None, "shared_mem_dict must not be None when enable_tinkerscript_mode is True."
-        assert shared_mem_dict_lock is not None, "shared_mem_dict_lock must not be None when enable_tinkerscript_mode is True."
-        app, additional_coro = register_enable_tinkerscript_mode_routes(app, zmq_context=context, shared_mem_dict=shared_mem_dict, shared_mem_dict_lock=shared_mem_dict_lock)
+    if enable_swarm_mode:
+        from ajet.tuner_lib.weight_tuner.experimental.as_swarm_server import register_enable_swarm_mode_routes
+        assert shared_mem_dict is not None, "shared_mem_dict must not be None when enable_swarm_mode is True."
+        assert shared_mem_dict_lock is not None, "shared_mem_dict_lock must not be None when enable_swarm_mode is True."
+        app, additional_coro = register_enable_swarm_mode_routes(app, zmq_context=context, shared_mem_dict=shared_mem_dict, shared_mem_dict_lock=shared_mem_dict_lock)
     else:
         additional_coro = None
 
@@ -219,18 +219,18 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
 
 
 class InterchangeServer(Process):
-    def __init__(self, experiment_dir: str, port: int, num_fastapi_process: int = 2, max_fastapi_threads: int = 512, enable_tinkerscript_mode=False):
+    def __init__(self, experiment_dir: str, port: int, num_fastapi_process: int = 2, max_fastapi_threads: int = 512, enable_swarm_mode=False):
         super().__init__()
         self.experiment_dir = experiment_dir
         self.port = port
         self.num_fastapi_process = num_fastapi_process
         self.max_fastapi_threads = max_fastapi_threads
-        self.enable_tinkerscript_mode = enable_tinkerscript_mode
+        self.enable_swarm_mode = enable_swarm_mode
 
     def run(self):
         logger.info(f"Starting Interchange Server on port {self.port} with {self.num_fastapi_process} processes and {self.max_fastapi_threads} threads per process.")
 
-        if self.enable_tinkerscript_mode:
+        if self.enable_swarm_mode:
             manager = Manager()
             shared_mem_dict = manager.dict()
             shared_mem_dict_lock = manager.Lock()
@@ -238,7 +238,7 @@ class InterchangeServer(Process):
             shared_mem_dict = None
             shared_mem_dict_lock = None
 
-        app, additional_coro = get_app(self.max_fastapi_threads, self.enable_tinkerscript_mode, shared_mem_dict, shared_mem_dict_lock)
+        app, additional_coro = get_app(self.max_fastapi_threads, self.enable_swarm_mode, shared_mem_dict, shared_mem_dict_lock)
 
         async def serve_with_monitor(additional_coro):
             # Start the server
@@ -282,7 +282,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
     experiment_dir = config.ajet.experiment_dir
     num_fastapi_process = config.ajet.interchange_server.num_fastapi_process
     max_fastapi_threads = config.ajet.interchange_server.max_fastapi_threads
-    enable_tinkerscript_mode = config.ajet.enable_tinkerscript_mode
+    enable_swarm_mode = config.ajet.enable_swarm_mode
 
     # Find a free port if not specified or invalid
     port = int(os.environ.get("AJET_DAT_INTERCHANGE_PORT", -1))
@@ -306,7 +306,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
             port,
             num_fastapi_process,
             max_fastapi_threads,
-            enable_tinkerscript_mode,
+            enable_swarm_mode,
         )
         interchange_server.start()
     else:
@@ -360,7 +360,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
 
             if interchange_server:
                 interchange_server.terminate()
-            if enable_tinkerscript_mode:
-                from ajet.tuner_lib.weight_tuner.experimental.as_tinkerscript_server import kill_process_tree
+            if enable_swarm_mode:
+                from ajet.tuner_lib.weight_tuner.experimental.as_swarm_server import kill_process_tree
                 kill_process_tree(None, None)
         return -1

@@ -144,7 +144,7 @@ def run(config):
     max_parallel = config.ajet.debug.debug_max_parallel
     n_task = config.ajet.debug.debug_first_n_tasks
     vllm_port = config.ajet.debug.debug_vllm_port
-    enable_tinkerscript_mode = config.ajet.enable_tinkerscript_mode
+    enable_swarm_mode = config.ajet.enable_swarm_mode
 
     # --------- init ---------
     async_rollout_manager = ChatCompletionScheduler(
@@ -168,7 +168,7 @@ def run(config):
     logger.info(tasks[:n_task])
     ctx_tracker = parallel_env.rollout(
         tasks=tasks[:n_task],
-        mode="sample" if not enable_tinkerscript_mode else "sample-ts",  # type: ignore
+        mode="sample" if not enable_swarm_mode else "sample-ts",  # type: ignore
         epoch="1"
     )
     _ = parallel_env.to_dataproto(ctx_tracker)
@@ -189,7 +189,7 @@ def main(config):
     if config.ajet.enable_experimental_interchange_server:
         from ajet.tuner_lib.weight_tuner.experimental.as_oai_model_server import start_interchange_server
         start_interchange_server(config)
-        if config.ajet.enable_tinkerscript_mode:
+        if config.ajet.enable_swarm_mode:
             from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import http_change_engine_status
             http_change_engine_status(config, "ENGINE.ROLLING")
 

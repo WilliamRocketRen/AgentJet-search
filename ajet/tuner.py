@@ -186,4 +186,3 @@ class AjetTuner(object):
         if self.enable_interchange_server:
             if (self.proxy_client_started is True) and hasattr(self, "interchange_client"):
                 self.interchange_client._should_terminate = True
-                print(f'-->self.interchange_client._should_terminate = {self.interchange_client.should_terminate}')
