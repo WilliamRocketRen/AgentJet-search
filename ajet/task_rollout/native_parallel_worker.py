@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 import numpy as np
 import torch
+import threading
 from loguru import logger
 from tensordict import TensorDict
 from torch.nn.utils.rnn import pad_sequence
@@ -15,10 +16,11 @@ from tqdm import tqdm
 from verl import DataProto
 from verl.utils.torch_functional import pad_sequence_to_length
 
-from ajet.context_tracker.basic_tracker import BaseContextTracker
 from ajet.schema.task import Task
 from ajet.schema.trajectory import Sample
 from ajet.task_rollout.single_worker import BaseRolloutManager
+from ajet.context_tracker.basic_tracker import BaseContextTracker
+from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import http_change_engine_status
 
 
 class DynamicRolloutManager(BaseRolloutManager):
@@ -481,7 +483,9 @@ class DynamicRolloutManager(BaseRolloutManager):
         tracker_array: List[BaseContextTracker] = []
         assert mode != "validate"
         rollout_n = self.rollout_n
-        n_task = len(tasks)
+        n_batch_task = len(tasks)
+        n_task = min(len(tasks), self.max_parallel // rollout_n)
+        assert n_task > 0, f"n_task is not valid, n_task = min(len(tasks), self.max_parallel // rollout_n) = {n_task}"
         self.current_token_count_time = time.time()
 
         # initialize observation window
@@ -489,11 +493,13 @@ class DynamicRolloutManager(BaseRolloutManager):
             "info": ["" for _ in range(n_task * rollout_n)],
             "step": [0 for _ in range(n_task * rollout_n)],
             "stop": [False for _ in range(n_task * rollout_n)],
+            "hard_stop": [False for _ in range(n_task * rollout_n)],
             "token": [0 for _ in range(n_task * rollout_n)],
         }
         executor = ThreadPoolExecutor(max_workers=self.max_parallel)
         futures: List[Future] = []
         completed_task_id_map_ct: Dict[str, List[BaseContextTracker]] = {}
+        executor_lock = threading.Lock()
 
         # submit initial tasks
         dummy_task = Task(main_query="dummy task")
@@ -501,13 +507,15 @@ class DynamicRolloutManager(BaseRolloutManager):
             for task_rollout_index in range(rollout_n):
                 task_thread_index = task_batch_index * rollout_n + task_rollout_index
                 future = executor.submit(
-                    self.rollout_env_worker,
+                    self.rollout_env_worker_loop,
                     task=dummy_task,
                     task_tag="",
                     mode=mode,
                     task_batch_index=task_batch_index,
                     task_thread_index=task_thread_index,
                     observation_window=observation_window,
+                    completed_task_id_map_ct=completed_task_id_map_ct,
+                    executor_lock=executor_lock,
                 )
                 observation_window["info"][task_thread_index] = "1"
                 futures.append(future)
@@ -516,14 +524,15 @@ class DynamicRolloutManager(BaseRolloutManager):
             n = 0
             for ct_list in completed_task_id_map_ct.values():
                 n += len(ct_list)
-            return (n >= n_task * rollout_n)
+            print(f"Current collected samples: {n}, target: {n_batch_task * rollout_n}")
+            return (n >= n_batch_task * rollout_n)
 
         def enough_finished_task_stop_condition(completed_task_id_map_ct) -> bool:
             n_finish_roll_task = 0
             for ct_list in completed_task_id_map_ct.values():
                 if len(ct_list) >= rollout_n:
                     n_finish_roll_task += 1
-            return (n_finish_roll_task >= n_task)
+            return (n_finish_roll_task >= n_batch_task)
 
         def enough_non_dummy_task_stop_condition(completed_task_id_map_ct) -> bool:
             n_finish_roll_task = 0
@@ -535,63 +544,39 @@ class DynamicRolloutManager(BaseRolloutManager):
                     all_equal = all(x == task_cmd_reward_array[0] for x in task_cmd_reward_array)
                     if all_equal: continue
                     n_finish_roll_task += 1
-            return (n_finish_roll_task >= n_task)
+            return (n_finish_roll_task >= n_batch_task)
 
         stop_condition = enough_sample_stop_condition
 
-        def force_stop_all_threads():
-            for k in range(len(observation_window["stop"])):
-                observation_window["stop"][k] = True
+        def stop_all_threads_soft():
+            for k in range(len(observation_window["stop"])): observation_window["stop"][k] = True
+            http_change_engine_status(self.config, "ENGINE.ROLLING_POST")
             return
 
-        tic = time.time()
+        def stop_all_threads_hard():
+            for k in range(len(observation_window["hard_stop"])): observation_window["hard_stop"][k] = True
+            http_change_engine_status(self.config, "ENGINE.WEIGHT_SYNCING")
+            return
+
+        cnt = 0
         while True:
-            # wait for a completed task
-            done_arr, pending_arr = wait(futures, timeout=10, return_when=FIRST_COMPLETED)
-            print(f"Done tasks: {len(done_arr)}, Pending tasks: {len(pending_arr)}")
-            toc = time.time()
-            if (toc - tic) > 8:
-                tic = toc
+            cnt += 1
+            time.sleep(2)
+            if (cnt % 5 == 0):
                 self.step_status_printer(observation_window)
-            # get result
-            for future in done_arr:
-                ct: BaseContextTracker = future.result()
-                if ct.task_id not in completed_task_id_map_ct:
-                    completed_task_id_map_ct[ct.task_id] = [ct]
-                else:
-                    completed_task_id_map_ct[ct.task_id] += [ct]
-            # if meet stop condition
             meet_stop_condition_after_new_results = stop_condition(completed_task_id_map_ct)
             if meet_stop_condition_after_new_results:
-                force_stop_all_threads()
+                print("Sending soft stop signal to all threads...")
+                stop_all_threads_soft()
                 break
-            else:
-                # re-spawn new tasks for done futures
-                for task_batch_index in range(n_task):
-                    for task_rollout_index in range(rollout_n):
-                        task_thread_index = task_batch_index * rollout_n + task_rollout_index
-                        has_done = (futures[task_thread_index] in done_arr)
-
-                        observation_window["info"][task_thread_index] = str(int(observation_window["info"][task_thread_index]) + 1)
-                        observation_window["stop"][task_thread_index] = False
-                        observation_window["step"][task_thread_index] = 0
-
-                        if has_done:
-                            print(f"Re-spawning thread {task_thread_index}...")
-                            future = executor.submit(
-                                self.rollout_env_worker,
-                                task=dummy_task,
-                                task_tag="",
-                                mode=mode,
-                                task_batch_index=task_batch_index,
-                                task_thread_index=task_thread_index,
-                                observation_window=observation_window,
-                            )
-                            futures[task_thread_index] = future
 
         # wait for all threads to complete
         print('Finalizing all threads...')
-        wait(futures, return_when=ALL_COMPLETED)
+        executor.shutdown(wait=True)
+
+        # stop all threads hard
+        print("Sending hard stop signal to all threads...")
+        stop_all_threads_hard()
 
         # build tracker_array
         print('Collecting results...')

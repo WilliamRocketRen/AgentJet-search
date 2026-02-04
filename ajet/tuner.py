@@ -1,9 +1,6 @@
 from typing import TYPE_CHECKING, Callable, Union, Type
 
-from ajet.context_tracker.multiagent_tracking import (
-    MultiAgentContextTracker,
-)
-
+from ajet.context_tracker.multiagent_tracking import MultiAgentContextTracker
 from ajet.tuner_lib.weight_tuner import AgentScopeModelTuner
 from ajet.tuner_lib.weight_tuner import OpenaiClientModelTuner
 from ajet.tuner_lib.weight_tuner.as_oai_baseurl_apikey import OpenaiClientBaseUrlTuner
@@ -189,3 +186,4 @@ class AjetTuner(object):
         if self.enable_interchange_server:
             if (self.proxy_client_started is True) and hasattr(self, "interchange_client"):
                 self.interchange_client._should_terminate = True
+                print(f'-->self.interchange_client._should_terminate = {self.interchange_client.should_terminate}')

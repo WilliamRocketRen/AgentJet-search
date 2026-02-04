@@ -44,6 +44,7 @@ class AgentJetJob:
         algorithm: str = "grpo",
         n_gpu_for_infer: int | None = None, # only for trinity backbone
         grpo_n: int = 8,
+        batch_size: int = 32,
         tinkerscript_mode: bool = True,
         *kwargs,
     ) -> None:
@@ -60,6 +61,7 @@ class AgentJetJob:
         self.config.ajet.trainer_common.n_gpus_per_node = n_gpu
         self.config.ajet.trainer_common.algorithm.adv_estimator = algorithm
         self.config.ajet.rollout.num_repeat = grpo_n
+        self.config.ajet.data.train_batch_size = batch_size
         if n_gpu_for_infer is None and backbone == "trinity":
             raise ValueError("Please specify `n_gpu_for_infer` (n_gpu_for_infer < n_gpu) for trinity backbone.")
         if (n_gpu_for_infer is not None) and backbone == "verl":

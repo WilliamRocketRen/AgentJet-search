@@ -223,7 +223,7 @@ class TinkerScriptClient(object):
                     break
 
                 # Wait a bit before next poll
-                time.sleep(1)
+                time.sleep(5)
 
             except Exception as e:
                 logger.error(f"Error polling engine status: {e}")
@@ -242,7 +242,7 @@ class TinkerScriptClient(object):
             return result
         except Exception as e:
             logger.error(f"Error getting engine status: {e}")
-            return "unknown"
+            return "ENGINE.CANNOT_CONNECT"
 
     def can_continue_episode(self, episode_uuid: str) -> bool:
         if not episode_uuid:
@@ -303,6 +303,10 @@ class TinkerScriptClient(object):
             logger.info("Engine is BOOTING. Waiting until it becomes ROLLING...")
             self._wait_until_status_change_to(desired_status="ENGINE.ROLLING")
             logger.success("Training engine is now ROLLING and ready.")
+        elif current_status == "ENGINE.CANNOT_CONNECT":
+            logger.error("Cannot connect to the engine. Please check the network.")
+            self._wait_until_status_change_to(desired_status="ENGINE.ROLLING")
+            logger.success("Training engine is now ROLLING and ready.")
         else:
             raise RuntimeError(f"Cannot sync train config or start engine when engine is in status: {current_status}")
 
@@ -331,4 +335,3 @@ class TinkerScriptClient(object):
             self._wait_until_status_change_to(desired_status="ENGINE.OFFLINE")
         except Exception as e:
             logger.error(f"Error stopping engine: {e}")
-

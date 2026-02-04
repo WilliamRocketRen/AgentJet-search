@@ -1,11 +1,11 @@
 import time
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
-
 from loguru import logger
 
-from ajet.utils.testing_utils import TestFailException, TestSuccessException
-from ajet.task_runner.tinkerscript_runner import SwarmReceiveAbortException
+class SwarmReceiveAbortException(Exception):
+    pass
+
 
 T = TypeVar("T")
 
@@ -18,6 +18,8 @@ def retry_with_backoff(
     """Retry decorator with exponential backoff and structured logging."""
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        from ajet.utils.testing_utils import TestFailException, TestSuccessException
+
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
             target_max_retry = max_retry
@@ -36,7 +38,6 @@ def retry_with_backoff(
                         raise exc
                     except TestFailException as exc:  # noqa: BLE001
                         raise exc
-
                     except Exception as exc:  # noqa: BLE001
                         if attempt < target_max_retry - 1:
                             logger.bind(exception=True).exception(

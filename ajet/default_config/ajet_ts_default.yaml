@@ -7,7 +7,7 @@ ajet:
 
   model:
     # which model should be trained
-    path: /mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen2___5-14B-Instruct
+    path: /mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen2___5-3B-Instruct
 
   rollout:
     # the path to the workflow class
@@ -29,10 +29,13 @@ ajet:
     interchange_method: 'ipc' # options: 'tcp' (multi-nodes) or  'ipc' (1 node)
     interchange_server_port: 10086
     num_fastapi_process: 2  # 1, 2 or 4 is fine
-    max_fastapi_threads: 128  # 64 or 128 is fine
+    max_fastapi_threads: 512  # 64 or 128 is fine
     max_inference_tracker_threads: 64 # recommend to be equal to `ajet.rollout.max_env_worker`
     already_started: False # do not edit, used by `tinkerscript`
 
+  rollout:
+    # maximum number of parallel environments / simulate workers
+    max_env_worker: 128
 
 
 # ------------------ 不需要修改 ------------------

@@ -94,9 +94,9 @@ def main():
                     time.sleep(1)
 
 
-    tinkerscript_remote.stop_engine()
+    # tinkerscript_remote.stop_engine()
     # model_path = tinkerscript_remote.download_latest_model(path='./tinkerscript_saved_model')
-
+    time.sleep(10000)
     # Get tuned model from tinkerscript remote
     return None
 

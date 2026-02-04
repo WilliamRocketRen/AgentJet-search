@@ -49,9 +49,12 @@ class BaseAgentRunner(object):
 
     def runner_hooks(self, observation_window, task_thread_index, workflow_task):
         def should_interrupt_fn() -> bool:
-            if (observation_window["stop"] is not None) and observation_window["stop"][
-                task_thread_index
-            ]:  # Check if the thread should stop (because other threads have completed, making this thread useless)
+            if (observation_window["stop"] is not None) and observation_window["stop"][task_thread_index]:  # Check if the thread should stop (because other threads have completed, making this thread useless)
+                return True
+            return False
+
+        def should_interrupt_hard_fn() -> bool:
+            if (observation_window["hard_stop"] is not None) and observation_window["hard_stop"][task_thread_index]:  # Check if the thread should stop (because other threads have completed, making this thread useless)
                 return True
             return False
 
@@ -60,6 +63,7 @@ class BaseAgentRunner(object):
 
         return {
             "should_interrupt_fn": should_interrupt_fn,
+            "should_interrupt_hard_fn": should_interrupt_hard_fn,
             "generated_token_callback_fn": generated_token_callback_fn,
         }
 

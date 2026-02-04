@@ -33,8 +33,9 @@ from typing import Coroutine, Optional, Tuple
 from vllm.entrypoints.openai.protocol import ChatCompletionRequest
 from openai.types.chat.chat_completion import ChatCompletion
 
-from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import EpisodeStatus
 from ajet.utils.networking import find_free_port, get_host_ip
+from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import EpisodeStatus
+
 API_KEY_PREFIX = "sk-ajet-"
 
 class InterchangeCompletionRequest(BaseModel):
@@ -53,8 +54,8 @@ class HealthCheckRequest(BaseModel):
 
 # Create FastAPI app
 SERVER_SHUTDOWN_EVENT = threading.Event()
-DEBUG = False
-# DEBUG = True
+# DEBUG = False
+DEBUG = True
 
 context = zmq.Context()
 atexit.register(context.term)
@@ -84,25 +85,31 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
     app = FastAPI(title="AJet Interchange Endpoint", lifespan=lifespan)
 
 
-    def _begin_handle_chat_completion(episode_address, int_req: InterchangeCompletionRequest, episode_uuid, timeline_uuid, client_offline: threading.Event):
+    def _begin_handle_chat_completion(episode_address, int_req: InterchangeCompletionRequest, episode_uuid):
         """ run this in thread to avoid blocking main event loop
         """
         if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | Received new chat completion request (inside thread)")
 
         socket = context.socket(zmq.REQ)
-        socket.setsockopt(zmq.RCVTIMEO, 60*1000)  # 1 minute recv timeout
+        socket.setsockopt(zmq.RCVTIMEO, 6*1000)  # 6 second recv timeout
         socket.connect(f"{episode_address}")
         if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | connect done")
         socket.send_string(int_req.model_dump_json())
         if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | send_string")
 
         result_str = ""
-        for _ in range(5):  # max 5 minutes wait
+        for _ in range(50):  # max 5 minutes wait
             try:
                 if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | recv_string begin.")
                 result_str = socket.recv_string()
                 break
             except zmq.Again as e:
+                # check whether server is still in rolling status
+                if enable_tinkerscript_mode:
+                    assert shared_mem_dict is not None
+                    if shared_mem_dict['engine_status'] not in ["ENGINE.ROLLING", "ENGINE.ROLLING_POST"]:
+                        raise HTTPException(status_code=404, detail="The server is not in ENGINE.ROLLING status, cannot accept new requests.")
+
                 if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | recv_string timeout, retrying.")
                 continue
 
@@ -125,6 +132,8 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
         OpenAI-compatible chat completions endpoint.
         Receives ChatCompletionRequest and returns ChatCompletion.
         """
+        if DEBUG: logger.info("Received /v1/chat/completions request")
+
         # Parse authorization header (base64 encoded JSON)
         if not authorization:
             return HTTPException(status_code=401, detail="Missing authorization header")
@@ -150,23 +159,28 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
         new_req = ChatCompletionRequest.model_validate(body)
         if new_req.stream:
             return HTTPException(status_code=400, detail="Streaming responses not supported in current AgentJet version, please set `stream=false` for now.")
+
         # Create timeline UUID
         timeline_uuid = uuid.uuid4().hex
 
         # enable_tinkerscript_mode
         if enable_tinkerscript_mode:
+            from ajet.tuner_lib.weight_tuner.experimental.as_tinkerscript_server import ep_key
             assert shared_mem_dict is not None
             assert shared_mem_dict_lock is not None
-            if shared_mem_dict['engine_status'] != "ENGINE.ROLLING":
+
+            if shared_mem_dict['engine_status'] not in ["ENGINE.ROLLING", "ENGINE.ROLLING_POST"]:
                 logger.error(f"The server is not in ENGINE.ROLLING status (current status: [{shared_mem_dict['engine_status']}]), cannot accept new requests.")
-                raise HTTPException(status_code=503, detail="The server is not in ENGINE.ROLLING status, cannot accept new requests.")
-            if (f"episodes-{episode_uuid}") not in shared_mem_dict:
+                raise HTTPException(status_code=404, detail="The server is not in ENGINE.ROLLING status, cannot accept new requests.")
+
+            if ep_key(episode_uuid) not in shared_mem_dict:
                 raise HTTPException(status_code=404, detail=f"Episode {episode_uuid} not found.")
+
             # update activate timestamp
             with shared_mem_dict_lock:
-                es:EpisodeStatus = shared_mem_dict[f"episodes-{episode_uuid}"]
+                es:EpisodeStatus = shared_mem_dict[ep_key(episode_uuid)]
                 es.latest_activity_timestamp = time.time()
-                shared_mem_dict[f"episodes-{episode_uuid}"] = es
+                shared_mem_dict[ep_key(episode_uuid)] = es
 
         # Add to received queue
         int_req = InterchangeCompletionRequest(
@@ -177,17 +191,8 @@ def get_app(max_fastapi_threads: int = 512, enable_tinkerscript_mode=False, shar
             timeline_uuid = timeline_uuid,
         )
         if DEBUG: logger.info(f"episode_uuid: {episode_uuid} | Received new chat completion request (outside thread)")
-        client_offline = threading.Event()
-        try:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(request.app.state.executor, _begin_handle_chat_completion, episode_address, int_req, episode_uuid, timeline_uuid, client_offline)
-        finally:
-            client_offline.set()
-
-
-    @app.post("/reset")
-    async def reset():
-        return {"status": "reset_complete"}
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(request.app.state.executor, _begin_handle_chat_completion, episode_address, int_req, episode_uuid)
 
 
     if enable_tinkerscript_mode:
@@ -241,7 +246,7 @@ class InterchangeServer(Process):
                 app=app,
                 host="0.0.0.0",
                 port=self.port,
-                log_level="error",
+                log_level="info",
                 workers=self.num_fastapi_process
             )
             server = uvicorn.Server(config)
@@ -350,7 +355,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
                 interchange_server.join()
         except KeyboardInterrupt:
             logger.info("Shutting down interchange server...")
-            try: httpx.get(f"http://127.0.0.1:{port}/stop_engine", timeout=8).status_code
+            try: httpx.post(f"http://127.0.0.1:{port}/stop_engine", timeout=8).status_code
             except Exception: pass
 
             if interchange_server:

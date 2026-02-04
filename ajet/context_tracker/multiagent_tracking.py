@@ -49,12 +49,14 @@ class MultiAgentContextTracker(BaseContextTracker):
         tokenizer: PreTrainedTokenizer,
         config,
         should_interrupt_fn,
+        should_interrupt_hard_fn,
         generated_token_callback_fn,
         **kwargs,
     ):
         super().__init__(config, tokenizer, **kwargs)
         self.tokenizer = tokenizer
         self.should_interrupt_fn = should_interrupt_fn
+        self.should_interrupt_hard_fn = should_interrupt_hard_fn
         self.generated_token_callback_fn = generated_token_callback_fn
         self.context_overflow = False
         self.output_kwargs = {}
