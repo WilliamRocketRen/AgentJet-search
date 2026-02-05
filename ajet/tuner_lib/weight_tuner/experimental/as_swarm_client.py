@@ -26,6 +26,7 @@ class SwarmClient(object):
         self.server_url = server_url
         self.client_uuid = str(uuid.uuid4())
         self.previous_warning_time = 0
+        self.record_episode_expire_time = {}
 
 
     def begin_episode(self, allow_discard_timeout=60, episode_type="train") -> Tuple[str, OpenaiBaseUrlAndApiKey]:
@@ -48,6 +49,7 @@ class SwarmClient(object):
                 resp.raise_for_status()
                 data = ClaimEpisodeResponse.model_validate(resp.json())
                 episode_uuid = data.episode_uuid
+                self.record_episode_expire_time[episode_uuid] = time.time() + allow_discard_timeout
 
                 if data.success:
                     episode_uuid = data.episode_uuid
@@ -80,6 +82,11 @@ class SwarmClient(object):
     def end_episode(self, task:Task, episode_uuid: str, workflow_output: WorkflowOutput):
         if not episode_uuid:
             logger.error("No episode to end.")
+            return
+
+        remain_time = self.record_episode_expire_time.get(episode_uuid, 0) - time.time()
+        if remain_time < 0:
+            logger.warning(f"Episode {episode_uuid} has expired (expired {remain_time} seconds ago). Please use a larger `allow_discard_timeout` when `begin_episode`. Skipping end_episode.")
             return
 
         try:
@@ -131,7 +138,7 @@ class SwarmClient(object):
             data = EndEpisodeResponse.model_validate(resp.json())
 
             if data.success:
-                logger.info(f"Ended episode {episode_uuid}")
+                logger.info(f"Aborted episode {episode_uuid}")
             else:
                 logger.error(f"Failed to end episode {episode_uuid}")
 

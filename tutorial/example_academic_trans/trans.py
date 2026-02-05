@@ -49,7 +49,7 @@ def execute_agent(task: Task, api_baseurl_key: OpenaiBaseUrlAndApiKey):
         grader = TranslationQualityGrader(
             model=OpenAIChatModel(base_url=grader_base_url, api_key=grader_api_key, model="qwen3-max-2026-01-23")
         )
-        grader_score = asyncio.run(grader.aevaluate(original_text=abstract, translation=final_translation))
+        grader_score = asyncio.run(asyncio.wait_for(grader.aevaluate(original_text=abstract, translation=final_translation), timeout=120))
         raw_reward = grader_score.score
         print(f"Grader Score: {grader_score.score}, Reason: {grader_score.reason}, Metadata: {grader_score.metadata}")
     return WorkflowOutput(reward=raw_reward, metadata={
@@ -111,7 +111,8 @@ def detect_hard_proper_nouns(messages, base_url, api_key, abstract, rough_transl
     response = client.chat.completions.create(
         model="qwen3-max-2026-01-23",
         messages=messages,
-        extra_body={"enable_thinking":True}
+        timeout=60,
+        # extra_body={"enable_thinking":True}
     )
     fix_nouns = response.choices[0].message.content
     messages += [

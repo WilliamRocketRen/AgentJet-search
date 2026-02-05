@@ -61,7 +61,7 @@ def register_enable_swarm_mode_routes(
     # ------------------------------------------------------------------------------------------------
 
     async def find_claimed_episodes_that_need_to_be_unclaimed() -> List[str]:
-        result = []
+        to_unclaim_episodes = []
         current_time = time.time()
 
         for k, v in shared_mem_dict.items():
@@ -69,12 +69,12 @@ def register_enable_swarm_mode_routes(
                 es:EpisodeStatus = v
                 if es.episode_status == "claimed":
                     if (current_time - es.latest_activity_timestamp) > es.allow_discard_timeout:
-                        result.append(es.episode_uuid)
+                        to_unclaim_episodes.append(es.episode_uuid)
 
-        for episode_uuid in result:
+        for episode_uuid in to_unclaim_episodes:
             await _revert_episode_to_unclaimed(episode_uuid, shared_mem_dict, shared_mem_dict_lock)
 
-        return result
+        return to_unclaim_episodes
 
     def _context_tracker_reset_blocking(episode_uuid, shared_mem_dict):  # must async
         # send message to context tracker
@@ -110,6 +110,8 @@ def register_enable_swarm_mode_routes(
     async def _revert_episode_to_unclaimed(episode_uuid: str, shared_mem_dict, shared_mem_dict_lock):
         # check status again, because other thread may have changed it
         if shared_mem_dict[ep_key(episode_uuid)].episode_status != "claimed":
+            if episode_uuid in shared_mem_dict['unclaimed_episodes']: pass
+            else: shared_mem_dict['unclaimed_episodes'] += [episode_uuid]
             return
 
         # reset context tracker
@@ -126,17 +128,15 @@ def register_enable_swarm_mode_routes(
             es.allow_discard_timeout = -1
             with shared_mem_dict_lock:
                 shared_mem_dict[ep_key(episode_uuid)] = es
-                if episode_uuid in shared_mem_dict['unclaimed_episodes']:
-                    pass
-                else:
-                    shared_mem_dict['unclaimed_episodes'] += [episode_uuid]
+                if episode_uuid in shared_mem_dict['unclaimed_episodes']: pass
+                else: shared_mem_dict['unclaimed_episodes'] += [episode_uuid]
 
     def _delete_episode_record(episode_uuid: str, shared_mem_dict, shared_mem_dict_lock):
 
         with shared_mem_dict_lock:
             # remove episode record
             if ep_key(episode_uuid) in shared_mem_dict:
-                del shared_mem_dict[ep_key(episode_uuid)]
+                del shared_mem_dict[ep_key(episode_uuid)]   # RM--
                 logger.info(f"Deleted episode record for {episode_uuid}.")
             # remove from unclaimed list if present
             if episode_uuid in shared_mem_dict['unclaimed_episodes']:
@@ -499,7 +499,17 @@ def register_enable_swarm_mode_routes(
 
         # send workflow_output to zmq
         assert 'episodes' in shared_mem_dict
-        episode_type = shared_mem_dict[ep_key(episode_uuid)].episode_type
+        ep_stat = shared_mem_dict[ep_key(episode_uuid)]
+        episode_type = ep_stat.episode_type
+        episode_status = ep_stat.episode_status
+        client_uuid_recorded = ep_stat.client_uuid
+        if client_uuid_recorded != client_uuid:
+            logger.error(f"[server] Episode {episode_uuid} is claimed by different client: {client_uuid_recorded}, but got {client_uuid}.")
+            raise HTTPException(status_code=404, detail=f"Episode {episode_uuid} is claimed by different client: {client_uuid_recorded}, but got {client_uuid}.")
+
+        if episode_status != "claimed":
+            logger.error(f"[server] Episode {episode_uuid} is not in claimed status.")
+            raise HTTPException(status_code=400, detail=f"Episode {episode_uuid} is not in claimed status, maybe you take too long to submit.")
 
         if episode_type == "train":
             # _register_final_episode_output_blocking(episode_uuid, workflow_output, shared_mem_dict, shared_mem_dict_lock)    # must async

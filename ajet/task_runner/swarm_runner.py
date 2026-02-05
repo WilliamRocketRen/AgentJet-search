@@ -88,6 +88,7 @@ class SwarmRunner(BaseAgentRunner):
                     logger.warning(f"Received reset command for episode {episode_uuid}.")
                     context_tracker.reset()
                     zmq_socket.send_string("ack")
+                    continue
                 elif message == "RUNNER.SPECIAL.ABORT":
                     logger.warning(f"Received abort command for episode {episode_uuid}.")
                     context_tracker.reset()
@@ -104,8 +105,8 @@ class SwarmRunner(BaseAgentRunner):
             raise exc
 
         finally:
+            tuner.terminate_episode()   # this is very important to avoid resource leak
             zmq_socket.close()
-            tuner.terminate_episode()
             if ipc_path and os.path.exists(ipc_path): os.remove(ipc_path)
 
         return final_output

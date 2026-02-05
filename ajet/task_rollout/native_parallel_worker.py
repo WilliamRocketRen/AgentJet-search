@@ -61,9 +61,9 @@ class DynamicRolloutManager(BaseRolloutManager):
             if start == -1:
                 print_buf += [f"[finished]:{count} threads"]
         print(f"Rollout progress ({token_gen_per_sec_str}): " + "  //  ".join(print_buf))
-        if "info" in observation_window:
-            print_buf2 = "\t".join(observation_window["info"])
-            print(print_buf2)
+        # if "info" in observation_window:
+        #     print_buf2 = "\t".join(observation_window["info"])
+        #     print(print_buf2)
 
     def rollout_static(
         self,

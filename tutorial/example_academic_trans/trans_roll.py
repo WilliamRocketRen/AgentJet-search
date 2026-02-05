@@ -8,7 +8,7 @@ from ajet.copilot.job import AgentJetJob
 from ajet.tuner_lib.weight_tuner.experimental.as_swarm_client import SwarmClient
 from ajet.default_config.ajet_default import AjetTaskReader, HuggingfaceDatRepo
 from ajet.tuner_lib.weight_tuner.as_oai_baseurl_apikey import OpenaiBaseUrlAndApiKey
-from ajet import WorkflowOutput
+from ajet.utils.thread_executors import BoundedThreadPoolExecutor
 from ajet.schema.task import Task
 from ajet.task_reader import RouterTaskReader
 from ajet.utils.retry import retry_with_backoff
@@ -56,7 +56,7 @@ def main():
             model=REMOTE_TRAIN_MODEL_01,
             batch_size=REMOTE_BATCH_SIZE,
             grpo_n=LOCAL_GRPO_N,
-        )
+        ),
     )
 
     def rollout(task):
@@ -80,20 +80,17 @@ def main():
             logger.exception("Exception during rollout group", e)
 
     task_batch = []
+    executor = BoundedThreadPoolExecutor(max_workers=LOCAL_MAX_PARALLEL, max_queue_size=LOCAL_MAX_PARALLEL*2)
     for i, task in enumerate(dataset.generate_training_tasks()):
         task_batch += [task]
 
         if len(task_batch) == REMOTE_BATCH_SIZE:
             print('*********** beginning a new batch of tasks... ***********')
-            with ThreadPoolExecutor(max_workers=LOCAL_MAX_PARALLEL) as executor:
-                for task in task_batch:
-                    executor.submit(rollout, task)
-            executor.shutdown(wait=True)
+            for task in task_batch:
+                executor.submit(rollout, task)
             task_batch = []
-            print('*********** tasks completed, wait a minute... ***********')
-            time.sleep(60)
 
-
+    executor.shutdown(wait=True)
     return None
 
 
