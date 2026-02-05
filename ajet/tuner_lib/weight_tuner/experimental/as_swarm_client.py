@@ -108,19 +108,18 @@ class SwarmClient(object):
         except Exception as e:
             logger.error(f"Error ending episode: {e}")
 
-    def abort_episode(self, task:Task, episode_uuid: str, workflow_output: WorkflowOutput):
+    def abort_episode(self, episode_uuid: str):
         if not episode_uuid:
             logger.error("No episode to end.")
             return
 
         try:
-            task_id = task.task_id
-            workflow_output.metadata["task_id"] = task_id
+            workflow_output = WorkflowOutput(reward=0.0, metadata={})
             req_obj = EndEpisodeRequest(
                 client_uuid=self.client_uuid,
                 episode_uuid=episode_uuid,
                 workflow_output=workflow_output,
-                task_id=task_id
+                task_id=""
             )
 
             resp = httpx.post(

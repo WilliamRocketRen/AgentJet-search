@@ -77,7 +77,7 @@ def main():
             logger.exception("Exception during rollout group", e)
 
     task_batch = []
-    for i, task in enumerate(dataset.get_training_tasks()):
+    for i, task in enumerate(dataset.generate_training_tasks()):
         task_batch += [task]
 
         if len(task_batch) == REMOTE_BATCH_SIZE:

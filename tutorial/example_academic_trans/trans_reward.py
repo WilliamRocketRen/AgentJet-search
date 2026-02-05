@@ -76,6 +76,7 @@ def get_translation_quality_system_prompt() -> str:
             4. **Subject-verb inconsistencies** - Mismatched subjects due to improper sentence structure (e.g., "在...中，本文展示..." where the subject is confused)
             5. **Inappropriate word choices** - Using colloquial or incorrect terms instead of proper academic expressions (e.g., "效率" vs "有效性" in certain contexts)
             6. **Redundant punctuation** - Unnecessary commas or other punctuation that disrupts Chinese reading flow
+            7. **主语不清晰** - 中文句子主语缺失或不明确。例如：“通过该实验，证明了该药物对癌细胞有抑制作用”（缺少主语）
 
             **Examples of these errors:**
             [[examples_text]]

@@ -27,9 +27,9 @@ LOCAL_DATASET_PATH = "/mnt/data_cpfs/qingxu.fu/agentjet/agentjet/tmp/arxiv_paper
 REMOTE_SWARM_URL = "http://localhost:10086" # Change to your swarm remote url
 
 # --------- configurations that take effect remotely -------------
+REMOTE_BATCH_SIZE = 32
 REMOTE_ALLOCATE_GPU_PER_NODE = 8
 REMOTE_TRAIN_MODEL_01 = '/mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen2.5-7B-Instruct'
-REMOTE_BATCH_SIZE = 32
 
 class WeightUpdatedHalfway(Exception):
     """Raised when the remote side starts updating model weights halfway through an episode."""
@@ -49,55 +49,51 @@ def main():
 
     # Hand shake with remote swarm server
     swarm_remote = SwarmClient(REMOTE_SWARM_URL)
-    # swarm_remote.stop_engine()
     swarm_remote.auto_sync_train_config_and_start_engine(
         AgentJetJob(
             algorithm="grpo",
             n_gpu=REMOTE_ALLOCATE_GPU_PER_NODE,
             model=REMOTE_TRAIN_MODEL_01,
+            batch_size=REMOTE_BATCH_SIZE,
             grpo_n=LOCAL_GRPO_N,
-        ),
-        force_restart=True,
+        )
     )
 
-    # Define rollout
     def rollout(task):
         group_reward = []
-        for i in range(LOCAL_GRPO_N):
-            episode_uuid = None
-            try:
-                # begin episode
-                episode_uuid, api_baseurl_key = swarm_remote.begin_episode()
-                # execute agent
-                workflow_output = execute_agent(task, api_baseurl_key)
-                # report output back to swarm remote
-                swarm_remote.end_episode(task, episode_uuid, workflow_output)
-                # collect reward
-                group_reward.append(workflow_output.reward)
-            except Exception as e:
-                logger.exception("Exception during rollout:", e)
-                if episode_uuid:
-                    swarm_remote.abort_episode(episode_uuid)
+        try:
+            for _ in range(LOCAL_GRPO_N):
+                try:
+                    # begin episode
+                    episode_uuid, api_baseurl_key = swarm_remote.begin_episode()
+                    # execute agent
+                    workflow_output = execute_agent(task, api_baseurl_key)
+                    # report output back to swarm remote
+                    swarm_remote.end_episode(task, episode_uuid, workflow_output)
+                    # collect reward
+                    group_reward.append(workflow_output.reward)
+                except Exception as e:
+                    logger.exception("Exception during rollout:", e)
+
             print(f"Group reward mean & std: {sum(group_reward)/len(group_reward)} +/- { (max(group_reward)-min(group_reward))/2 }")
+        except Exception as e:
+            logger.exception("Exception during rollout group", e)
 
-    # Main Training loop
-    futures = []
-    with ThreadPoolExecutor(max_workers=LOCAL_MAX_PARALLEL) as executor:
-        for epoch in range(LOCAL_NUM_EPOCH):
-            for i, task in enumerate(dataset.generate_training_tasks()):
-                print(f"Submitting task for epoch {epoch}")
-                future = executor.submit(rollout, task)
+    task_batch = []
+    for i, task in enumerate(dataset.generate_training_tasks()):
+        task_batch += [task]
 
-                futures += [future]
-                while (i % REMOTE_BATCH_SIZE) == (REMOTE_BATCH_SIZE - 1) and futures:
-                    futures = [f for f in futures if not f.done()]
-                    time.sleep(1)
+        if len(task_batch) == REMOTE_BATCH_SIZE:
+            print('*********** beginning a new batch of tasks... ***********')
+            with ThreadPoolExecutor(max_workers=LOCAL_MAX_PARALLEL) as executor:
+                for task in task_batch:
+                    executor.submit(rollout, task)
+            executor.shutdown(wait=True)
+            task_batch = []
+            print('*********** tasks completed, wait a minute... ***********')
+            time.sleep(60)
 
 
-    # swarm_remote.stop_engine()
-    # model_path = swarm_remote.download_latest_model(path='./swarm_saved_model')
-    time.sleep(10000)
-    # Get tuned model from swarm remote
     return None
 
 
