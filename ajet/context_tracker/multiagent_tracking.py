@@ -294,7 +294,7 @@ class MultiAgentContextTracker(BaseContextTracker):
         # save to self.saved_timelines
         self.saved_timelines += [copy.deepcopy(timeline)]
 
-        # DEBUG = True   # warn when merge fails
+        # warn when merge fails
         timeline_merging_policy: TimelineMergingPolicyConfig = self.config.ajet.context_tracker.timeline_merging_policy
         if (
             self.config.ajet.context_tracker.detect_timeline_snap

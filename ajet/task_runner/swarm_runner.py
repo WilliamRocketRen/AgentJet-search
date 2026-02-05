@@ -16,7 +16,8 @@ from loguru import logger
 from ajet import Workflow
 from typing import Callable
 
-DEBUG = True
+# DEBUG = True
+DEBUG = False
 
 context = zmq.Context()
 atexit.register(context.term)

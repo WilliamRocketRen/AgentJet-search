@@ -4,6 +4,7 @@ from openjudge.graders.llm_grader import LLMGrader
 from openjudge.models.base_chat_model import BaseChatModel
 from typing import List
 from textwrap import dedent
+from beast_logger import print_listofdict
 
 
 examples = [
@@ -68,15 +69,19 @@ def get_translation_quality_system_prompt() -> str:
     return dedent("""
             You are an objective translation quality evaluator for academic paper translations from English to Chinese. Your task is to identify ONLY the specific types of errors demonstrated in the provided examples - not general translation quality issues.
 
-            Focus (but do not limit to) on issues below (as shown in the examples):
+            重点关注（但不限于）以下问题类型（如示例所示）：
 
-            1. **First-person pronoun issues** - Using "我们" instead of "本研究" or "本文" in academic contexts
-            2. **Abbreviation translation errors** - Using abbreviations when concise Chinese exists (e.g., "GWs" instead of "引力波"), or translating abbreviations that should remain in English (like "EMBB")
-            3. **Word order problems** - Not adjusting sentence structure to emphasize key points in Chinese academic style
-            4. **Subject-verb inconsistencies** - Mismatched subjects due to improper sentence structure (e.g., "在...中，本文展示..." where the subject is confused)
-            5. **Inappropriate word choices** - Using colloquial or incorrect terms instead of proper academic expressions (e.g., "效率" vs "有效性" in certain contexts)
-            6. **Redundant punctuation** - Unnecessary commas or other punctuation that disrupts Chinese reading flow
+            1. **错误使用第一人称代词** - 禁止使用"我们"。正确的方法是使用"本研究"、"本文"、“研究者”，或者直接删除we并改写句子替换主语。不要漏掉出现的任何第一人称代词。
+            2. **缩写翻译错误** - 当存在简洁的中文表达时使用缩写（例如，使用"GWs"而非"引力波"），或翻译本应保留英文的缩写（如"EMBB"）
+            3. **语序问题** - 未调整句子结构以符合中文学术风格强调重点的习惯
+            4. **主谓不一致、主语缺失** - 由于句子结构不当导致主语混乱（例如，"在...中，本文展示..."中主语混淆）
+            5. **用词不当** - 使用口语化或不正确的术语而非恰当的学术表达
+            6. **多余标点和停顿** - 不必要的逗号或其他标点符号影响中文阅读流畅性
             7. **主语不清晰** - 中文句子主语缺失或不明确。例如：“通过该实验，证明了该药物对癌细胞有抑制作用”（缺少主语）
+            8. **缩写问题** - 首次出现自定义缩写、且原文中已经提供自定义缩写的英文全称时，没有在首次出现的地方提供英文全称。
+                （正确的例子：`We have used the LAsMA heterodyne array installed on the Atacama Pathfinder EXperiment (APEX)`->`本研究使用了安装在阿塔卡马探路者实验望远镜（APEX, Atacama Pathfinder EXperiment）上的LAsMA外差阵列`）
+            9. **专有名词翻译错误** - 领域特定的专有名词翻译错误，例如技术术语、学科术语等。如错把Agent翻译成“代理”（实际上应为“智能体”）等。
+            10. **表意偏差** - 翻译结果与原文在意义上存在偏差，导致信息传达不准确。
 
             **Examples of these errors:**
             [[examples_text]]
@@ -90,15 +95,19 @@ def get_translation_quality_system_prompt() -> str:
             * For each key issue found, provide the specific error, its type, and where it appears in the translation.
             * Be precise about which error category each issue belongs to.
             * Focus on objective errors matching the example patterns, not subjective preferences.
+            * 当出现  **语序问题**、**主谓不一致、主语缺失**、**主语不清晰**、**专有名词翻译错误**、**表意偏差** 等严重问题时，直接给 0 分。
+            * 逐句分析，切勿遗漏。
 
             Think carefully before flagging any error. Ask yourself: Does this match one of the specific error types from the examples? Is this truly an objective error or just a stylistic preference?
 
             Return your response in this format:
-            <score>X</score>
-            <reasoning>Your detailed step-by-step reasoning analyzing the translation against the error categories</reasoning>
+            <reasoning>
+            Your analysis
+            </reasoning>
             <key_issues>
             - Error Type: [category]. Error: [specific issue]. Location: [where it appears in the translation]
             </key_issues>
+            <score>X</score>
 
             The score must be 0, 1, 2. Each key issue should be on its own line starting with a dash. If no errors are found, the key_issues section should be empty or state "None detected".
         """.replace("[[examples_text]]", examples_text))
@@ -129,7 +138,10 @@ def parse_translation_quality_response(text: str) -> dict:
 
 def build_translation_quality_messages(original_text: str, translation: str) -> List[dict]:
     return [
-        {"role": "system", "content": get_translation_quality_system_prompt()},
+        {
+            "role": "system",
+            "content": get_translation_quality_system_prompt()
+        },
         {
             "role": "user",
             "content": TRANSLATION_QUALITY_USER_PROMPT.format(

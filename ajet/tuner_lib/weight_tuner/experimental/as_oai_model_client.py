@@ -22,8 +22,8 @@ atexit.register(context.term)
 if TYPE_CHECKING:
     from ajet.context_tracker.multiagent_tracking import MultiAgentContextTracker
 
-# DEBUG = False
-DEBUG = True
+DEBUG = False
+# DEBUG = True
 
 def generate_auth_token(agent_name, target_tag, episode_uuid, episode_address):
     """

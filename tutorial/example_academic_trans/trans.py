@@ -3,10 +3,10 @@ import re
 import os
 import time
 import asyncio
-import requests
 import threading
 from loguru import logger
 from textwrap import dedent
+from openai import OpenAI
 
 from ajet import WorkflowOutput
 from ajet.schema.task import Task
@@ -22,18 +22,6 @@ from openjudge.models import OpenAIChatModel
 from .trans_reward import TranslationQualityGrader, build_translation_quality_messages, examples
 
 
-LOCAL_DATASET_PATH = "/mnt/data_cpfs/qingxu.fu/agentjet/agentjet/tmp/arxiv_papers/train.parquet"
-
-
-# Handshake with swarm remote, then send training param to swarm remote (such as model to be trained, algorithm, etc)
-dataset = RouterTaskReader(
-    reader_type = "huggingface_dat_repo",
-    reader_config = AjetTaskReader(
-        huggingface_dat_repo = HuggingfaceDatRepo(
-            dataset_path = LOCAL_DATASET_PATH
-        )
-    )
-)
 
 @retry_with_backoff(max_retry=3)
 def execute_agent(task: Task, api_baseurl_key: OpenaiBaseUrlAndApiKey):
@@ -48,22 +36,61 @@ def execute_agent(task: Task, api_baseurl_key: OpenaiBaseUrlAndApiKey):
     messages, rough_translate = rough_translate_agent(base_url, api_key, abstract)
     # print_listofdict(messages, header="rough_translate_agent", mod="c")
 
-    messages, fix_nouns = detect_hard_proper_nouns(messages, base_url, api_key, abstract, rough_translate)
+    # messages, fix_nouns = detect_hard_proper_nouns(messages, base_url, api_key, abstract, rough_translate)
+    messages, fix_nouns = detect_hard_proper_nouns(messages, grader_base_url, grader_api_key, abstract, rough_translate)
     # print_listofdict(messages, header="detect_hard_proper_nouns", mod="c")
 
     messages, final_translation = produce_final_translation(messages, base_url, api_key, abstract, rough_translate, fix_nouns)
     print_listofdict(messages, header="final_translation", mod="c")
 
-    grader = TranslationQualityGrader(
-        model=OpenAIChatModel(base_url=grader_base_url, api_key=grader_api_key, model="qwen-max")
-    )
-    grader_score = asyncio.run(grader.aevaluate(original_text=abstract, translation=final_translation))
-    raw_reward = grader_score.score  # Normalize to 0-1 range (score is 0-3)
+    if final_translation is None:
+        raw_reward = 0.0
+    else:
+        grader = TranslationQualityGrader(
+            model=OpenAIChatModel(base_url=grader_base_url, api_key=grader_api_key, model="qwen3-max-2026-01-23")
+        )
+        grader_score = asyncio.run(grader.aevaluate(original_text=abstract, translation=final_translation))
+        raw_reward = grader_score.score
+        print(f"Grader Score: {grader_score.score}, Reason: {grader_score.reason}, Metadata: {grader_score.metadata}")
     return WorkflowOutput(reward=raw_reward, metadata={
         "rough_translate": rough_translate,
         "fix_nouns": fix_nouns,
         "final_translation": final_translation
     })
+
+
+def produce_final_translation(messages, base_url, api_key, abstract, rough_translate, fix_nouns):
+    messages = messages + [
+        {
+            "role": "user",
+            "content": "Please produce the final, corrected Chinese translation by applying all the corrections listed above. "
+                       "Output only the final translation between <final_result> ... </final_result>, so I will extract result with regex."
+        },
+    ]
+
+    client = OpenAI(base_url=base_url, api_key=api_key)
+    response = client.chat.completions.create(
+        model="agentjet-model",
+        messages=messages
+    )
+    final_translation = response.choices[0].message.content
+
+    messages += [
+        {
+            "role": "assistant",
+            "content": final_translation
+        }
+    ]
+
+    # Extract final translation
+    match = re.search(r"<final_result>(.*?)</final_result>", final_translation, re.DOTALL)
+    if match:
+        final_translation = match.group(1).strip()
+    else:
+        final_translation = None
+
+    return messages, final_translation
+
 
 
 def detect_hard_proper_nouns(messages, base_url, api_key, abstract, rough_translate):
@@ -77,10 +104,16 @@ def detect_hard_proper_nouns(messages, base_url, api_key, abstract, rough_transl
                         "If no errors are found, return an empty list []."
                         "Please list all translation errors of discipline-specific proper nouns found in the translation result according to the requirements."
         },
+
     ]
 
-    response = requests.post( f"{base_url}/chat/completions", json = { "model": "qwen-turbo", "messages": messages, }, headers = { "Authorization": f"Bearer {api_key}" } )
-    fix_nouns = response.json()['choices'][0]['message']['content']
+    client = OpenAI(base_url=base_url, api_key=api_key)
+    response = client.chat.completions.create(
+        model="qwen3-max-2026-01-23",
+        messages=messages,
+        extra_body={"enable_thinking":True}
+    )
+    fix_nouns = response.choices[0].message.content
     messages += [
         {
             "role": "assistant",
@@ -88,28 +121,6 @@ def detect_hard_proper_nouns(messages, base_url, api_key, abstract, rough_transl
         }
     ]
     return messages, fix_nouns
-
-
-def produce_final_translation(messages, base_url, api_key, abstract, rough_translate, fix_nouns):
-    messages = messages + [
-        {
-            "role": "user",
-            "content": "Please produce the final, corrected Chinese translation by applying all the corrections listed above. "
-                       "Output only the final translation without any explanations or additional text."
-        },
-    ]
-
-    response = requests.post( f"{base_url}/chat/completions", json = { "model": "qwen-turbo", "messages": messages, }, headers = { "Authorization": f"Bearer {api_key}" } )
-    final_translation = response.json()['choices'][0]['message']['content']
-
-    messages += [
-        {
-            "role": "assistant",
-            "content": final_translation
-        }
-    ]
-
-    return messages, final_translation
 
 
 def rough_translate_agent(base_url, api_key, abstract):
@@ -123,9 +134,12 @@ def rough_translate_agent(base_url, api_key, abstract):
                 "such as conforming to the logic of the Chinese language, being simple, rigorous, and concise, "
                 "and avoiding the use of first-person pronouns when passive voice is appropriate. "
                 "Ensure that specialized terms are translated correctly according to academic standards. "
-                "Replace 我们 with 本研究 or 本文. "
-                "If an abbreviation is short in Chinese, use Chinese. "
-                "If an abbreviation is long in Chinese, use abbreviation. "
+                "Replace 我/我们 with 本研究 or 本文 or 研究者 or simply remove it and rephrase the sentence. "
+                "If an English abbreviation is short in Chinese, use Chinese. "
+                "If an English abbreviation is long in Chinese, use English abbreviation. "
+                "To use an English abbreviation, if the author has mentioned the full form first, mention the full form at its first appearance. "
+                "e.g. `We have used the LAsMA heterodyne array installed on the Atacama Pathfinder EXperiment (APEX)` should be translated as "
+                "`本研究使用了安装在阿塔卡马探路者实验望远镜（APEX, Atacama Pathfinder EXperiment）上的LAsMA外差阵列`. "
         },
         {
             "role": "user",
@@ -135,8 +149,13 @@ def rough_translate_agent(base_url, api_key, abstract):
 
     for ex in examples:
         messages[0]['content'] += f"\n\nExample:\n\tOriginal: {ex['original']}\n\tBad Translation: {ex['bad']}\n\tHint: {ex['hint']}\n\tGood Translation: {ex['good']}"
-    response = requests.post( f"{base_url}/chat/completions", json = { "model": "qwen-turbo", "messages": messages, }, headers = { "Authorization": f"Bearer {api_key}" } )
-    rough_translate = response.json()['choices'][0]['message']['content']
+
+    client = OpenAI(base_url=base_url, api_key=api_key)
+    response = client.chat.completions.create(
+        model="agentjet-model",
+        messages=messages
+    )
+    rough_translate = response.choices[0].message.content
     messages += [
         {
             "role": "assistant",
@@ -145,18 +164,3 @@ def rough_translate_agent(base_url, api_key, abstract):
     ]
 
     return messages, rough_translate
-
-
-
-if __name__ == "__main__":
-
-    for i, task in enumerate(dataset.generate_training_tasks()):
-        execute_agent(
-            task,
-            OpenaiBaseUrlAndApiKey(
-                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                api_key=os.environ.get("DASHSCOPE_API_KEY", "")
-            )
-        )
-
-

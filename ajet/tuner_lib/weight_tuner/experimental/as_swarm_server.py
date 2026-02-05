@@ -26,7 +26,8 @@ from ajet.tuner_lib.weight_tuner.experimental.interchange_utils import (
     VALID_STATUSES,
 )
 
-DEBUG = True
+# DEBUG = True
+DEBUG = False
 RCVTIMEO = 2 * 1000
 RCVTIMEO_OUT = 300 * 1000
 RCVTIMEO_WAIT_N = RCVTIMEO_OUT // RCVTIMEO
