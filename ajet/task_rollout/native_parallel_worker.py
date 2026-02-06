@@ -606,6 +606,7 @@ class VerlRolloutManager(DynamicRolloutManager):
             except Exception as e:
                 raise e
             finally:
+                logger.bind(exception=True).exception("Error during tracker.tokenize()")  # for debugging
                 tracker.generate_log(global_step=self.current_global_steps)
                 if os.environ.get("BEST_LOGGER_PATH", None) and os.environ.get(
                     "AJET_DEBUG", None
