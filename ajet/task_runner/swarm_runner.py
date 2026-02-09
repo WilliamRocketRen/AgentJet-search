@@ -75,7 +75,7 @@ class SwarmRunner(BaseAgentRunner):
                     message = zmq_socket.recv_string()
                 except zmq.Again as e:
                     if should_exit_hard():
-                        logger.warning(f'{episode_uuid} Exiting workflow due to should_exit_hard signal.')
+                        # logger.warning(f'{episode_uuid} Exiting workflow due to should_exit_hard signal.')
                         context_tracker.reset()
                         raise SwarmReceiveAbortException(f"Episode {episode_uuid} aborted due to system exit.")
                     else:
@@ -127,7 +127,7 @@ class SwarmRunner(BaseAgentRunner):
         should_exit_hard = hooks['should_interrupt_hard_fn']
 
         if should_exit_soft() or should_exit_hard():
-            print(f'Exiting workflow worker due to interrupt signal for episode {workflow_task.episode_uuid}.')
+            # print(f'Exiting workflow worker due to interrupt signal for episode {workflow_task.episode_uuid}.')
             raise SwarmReceiveAbortException(f"Episode {workflow_task.episode_uuid} aborted due to interrupt signal.")
 
         # context tracker will trace and gather everything we need for training

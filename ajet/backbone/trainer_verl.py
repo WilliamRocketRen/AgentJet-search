@@ -596,8 +596,9 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                         context_tracker_arr: List[BaseContextTracker] = self.parallel_env.rollout(
                             tasks, mode="sample", epoch=f"train.{epoch}"
                         )
-                        from ajet import bp
-                        bp("BATCH")
+
+                        # from ajet import bp; bp("BATCH")
+
                         logger.info("end fit rollout")
                         gen_batch_output = self.parallel_env.to_dataproto(context_tracker_arr)
                         logger.info("end dataproto convertion")

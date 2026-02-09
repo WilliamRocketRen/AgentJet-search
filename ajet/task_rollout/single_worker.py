@@ -128,7 +128,7 @@ class BaseRolloutManager:
                     workflow_task=workflow_task,
                 )
             except SwarmReceiveAbortException as exc:  # noqa: BLE001
-                print('SwarmReceiveAbortException caught in rollout_env_worker')
+                # print('SwarmReceiveAbortException caught in rollout_env_worker')
                 return None # type: ignore
             except TestSuccessException as e:
                 logger.success(
