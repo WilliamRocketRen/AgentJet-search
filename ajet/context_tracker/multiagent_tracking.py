@@ -216,7 +216,12 @@ class MultiAgentContextTracker(BaseContextTracker):
         timeline_uuid: str = "",
     ):
         assert timeline_uuid in self.timeline_cache, "Timeline UUID not found in cache. Please ensure `step_prepare` is called before `step_track`."
-        timeline = self.timeline_cache.get(timeline_uuid, [])
+
+        # round ++
+        self.round_cnt += 1
+
+        # get timeline from cache
+        timeline = self.timeline_cache.pop(timeline_uuid, [])
         if not self.already_mad_flag:
             if (
                 compute_string_madness(
@@ -290,6 +295,11 @@ class MultiAgentContextTracker(BaseContextTracker):
         # assert all other message is not first_message
         for i in range(1, len(timeline)):
             assert not timeline[i].first_message
+
+        # no longer write anything
+        if self._read_only:
+            logger.exception("Timeline is in read-only mode, should not save new timeline. Please report a github issue if you see this error.")
+            return
 
         # save to self.saved_timelines
         self.saved_timelines += [copy.deepcopy(timeline)]
@@ -556,6 +566,8 @@ class MultiAgentContextTracker(BaseContextTracker):
     def group_merge(self) -> List[List[ExtendedMessage]]:
         timeline_merging_policy: TimelineMergingPolicyConfig = self.config.ajet.context_tracker.timeline_merging_policy
         self.saved_timelines = merge_tracker_timelines(self.saved_timelines, timeline_merging_policy)
+        self._read_only = True
+
         return self.saved_timelines
 
 

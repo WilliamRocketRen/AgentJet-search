@@ -255,7 +255,7 @@ class DynamicRolloutManager(BaseRolloutManager):
                     completed_task_futures = [f for f in task_future_array if f.done()]
                     completed_results = [f.result() for f in completed_task_futures]
                     completed_results = [
-                        tracker for tracker in completed_results if not tracker.discarded
+                        tracker for tracker in completed_results if not tracker._discarded
                     ]
                     reward = [
                         tracker.reward_structure.performance_reward for tracker in completed_results
@@ -306,7 +306,7 @@ class DynamicRolloutManager(BaseRolloutManager):
                         )
                     time.sleep(5)
 
-            # We have enough number of samples, but we need to wait for all threads to finish, including discarded threads
+            # We have enough number of samples, but we need to wait for all threads to finish, including ._discarded threads
             tic = -1
             while any(f.running() for task_future_array in futures for f in task_future_array):
                 tic += 1
@@ -325,7 +325,7 @@ class DynamicRolloutManager(BaseRolloutManager):
                 completed_task_futures = [f for f in task_future_array if f.done()]
                 completed_results = [f.result() for f in completed_task_futures]
                 completed_results = [
-                    tracker for tracker in completed_results if not tracker.discarded
+                    tracker for tracker in completed_results if not tracker._discarded
                 ]
                 task_cmd_reward_array = [
                     tracker.reward_structure.performance_reward for tracker in completed_results
@@ -409,7 +409,7 @@ class DynamicRolloutManager(BaseRolloutManager):
                 completed_task_futures = [f for f in task_future_array if f.done()]
                 completed_results = [f.result() for f in completed_task_futures]
                 completed_results = [
-                    tracker for tracker in completed_results if not tracker.discarded
+                    tracker for tracker in completed_results if not tracker._discarded
                 ]
                 # in-group success rate and reward
                 task_cmd_reward_array = [
@@ -582,6 +582,19 @@ class DynamicRolloutManager(BaseRolloutManager):
         print('Collecting results...')
         for ct_list in completed_task_id_map_ct.values():
             tracker_array.extend(ct_list)
+
+
+        # TODO: support multi-step reward
+        task_success_rate = np.mean(
+            [tracker.reward_structure.success_rate for tracker in tracker_array]
+        )
+        task_scalar_reward = np.mean(
+            [tracker.reward_structure.final_scalar_reward for tracker in tracker_array]
+        )
+
+        for tracker in tracker_array:
+            tracker.current_batch_success_rate = float(task_success_rate)
+            tracker.current_batch_reward = float(task_scalar_reward)
 
         # return all trackers
         return tracker_array

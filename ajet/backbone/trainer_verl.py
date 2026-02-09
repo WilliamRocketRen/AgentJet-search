@@ -563,8 +563,7 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
                 is_last_step = self.global_steps >= self.total_training_steps
-                from ajet import bp
-                bp("BATCH")
+
                 with marked_timer("step", timing_raw):
                     # generate a batch
                     logger.info("rollout step begin")
@@ -597,6 +596,8 @@ class AjetRayPPOTrainer(RayPPOTrainer):
                         context_tracker_arr: List[BaseContextTracker] = self.parallel_env.rollout(
                             tasks, mode="sample", epoch=f"train.{epoch}"
                         )
+                        from ajet import bp
+                        bp("BATCH")
                         logger.info("end fit rollout")
                         gen_batch_output = self.parallel_env.to_dataproto(context_tracker_arr)
                         logger.info("end dataproto convertion")

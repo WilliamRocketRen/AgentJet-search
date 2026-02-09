@@ -160,14 +160,18 @@ class BaseRolloutManager:
         **kwargs,
     ):
         try:
+
             cnt = 1
+
             while True:
 
-                if observation_window["stop"][task_thread_index]:
-                    print('rollout_env_worker_loop received stop signal, exiting...')
+                if observation_window["stop"][task_thread_index]:           # since we use multi-threading, the best way to communicate with main thread is through shared memory.
                     return
 
-                observation_window["info"][task_thread_index] = str(cnt)
+                observation_window["info"][task_thread_index] = str(cnt)    # observe how many iterations have been done in the loop
+
+                # Let's begin working on the task, the result `tracker` will contain everything: reward, llm calls, conversation history, etc.
+                # Later we will gather all trackers and do post-processing, generating samples for VeRL.
                 tracker = self.rollout_env_worker(
                     task=task,
                     task_batch_index=task_batch_index,
@@ -185,7 +189,9 @@ class BaseRolloutManager:
                             completed_task_id_map_ct[tracker.task_id] = [tracker]
                         else:
                             completed_task_id_map_ct[tracker.task_id] += [tracker]
+
                 cnt += 1
+
                 if observation_window["stop"][task_thread_index]:
                     return
                 else:

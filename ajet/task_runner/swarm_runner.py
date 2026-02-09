@@ -130,6 +130,7 @@ class SwarmRunner(BaseAgentRunner):
             print(f'Exiting workflow worker due to interrupt signal for episode {workflow_task.episode_uuid}.')
             raise SwarmReceiveAbortException(f"Episode {workflow_task.episode_uuid} aborted due to interrupt signal.")
 
+        # context tracker will trace and gather everything we need for training
         context_tracker = MultiAgentContextTracker(
             llm_inference_fn=self.llm_inference_fn,
             tokenizer=self.tokenizer,
@@ -137,6 +138,7 @@ class SwarmRunner(BaseAgentRunner):
             workflow_task = workflow_task,
             **hooks,
         )
+        # tuner will handle the communication and provide `baseurl_apikey`
         tuner = AjetTuner(
             context_tracker=context_tracker,
             llm_inference_fn=self.llm_inference_fn,
