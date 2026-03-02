@@ -12,7 +12,7 @@ from textwrap import dedent
 
 from agentscope.agent import ReActAgent
 from agentscope.formatter import DashScopeMultiAgentFormatter, OpenAIMultiAgentFormatter
-from agentscope.model import OpenAIChatModel
+from agentscope.model import OpenAIChatModel, DashScopeChatModel
 from loguru import logger
 from pydantic import Field
 
@@ -81,8 +81,8 @@ def get_official_agent_prompt(name) -> str:
 
 class ExampleWerewolves(Workflow):
     trainable_targets: List[str] | None = Field(default=["werewolf"], description="List of agents to be fine-tuned.")
-    big_external_opponent_llm_url = "http://22.17.52.4:2888/v1"
-    big_external_opponent_llm_name = "/mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen3-235B-A22B-Instruct-2507/"
+    big_external_opponent_llm_url: str = Field(default="http://22.17.52.4:2888/v1", description="The URL of the big external opponent LLM. You can replace it with any OpenAI-compatible LLM API URL.")
+    big_external_opponent_llm_name: str = Field(default="/mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen3-235B-A22B-Instruct-2507/", description="The model name of the big external opponent LLM. You can replace it with any OpenAI-compatible LLM name.")
 
     async def execute(self, workflow_task: WorkflowTask, tuner: AjetTuner) -> WorkflowOutput:
 
@@ -121,9 +121,7 @@ class ExampleWerewolves(Workflow):
                 name=f"Player{i + 1}",
                 sys_prompt=get_official_agent_prompt(f"Player{i + 1}"),
                 model=model_for_this_agent,
-                formatter=DashScopeMultiAgentFormatter()
-                     if role in self.trainable_targets
-                     else OpenAIMultiAgentFormatter(),
+                formatter=DashScopeMultiAgentFormatter() if isinstance(model_for_this_agent, DashScopeChatModel) else OpenAIMultiAgentFormatter(),
                 max_iters=3 if role in self.trainable_targets else 5,
             )
             # agent.set_console_output_enabled(False)

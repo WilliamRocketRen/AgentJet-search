@@ -52,16 +52,13 @@ def main():
     )
 
     def rollout(task):
-        try:
-            # begin episode
-            episode_uuid, api_baseurl_key = swarm_worker.begin_episode(discard_episode_timeout=60)
-            # execute agent ( base_url = api_baseurl_key.base_url, api_key = api_baseurl_key.api_key )
-            workflow_output = execute_agent(task, api_baseurl_key)  # reward is in `workflow_output`
-            # report output back to swarm remote
-            swarm_worker.end_episode(task, episode_uuid, workflow_output)
-            return
-        except:
-            pass
+        # begin episode
+        episode_uuid, api_baseurl_key = swarm_worker.begin_episode(discard_episode_timeout=60)
+        # execute agent ( base_url = api_baseurl_key.base_url, api_key = api_baseurl_key.api_key )
+        workflow_output = execute_agent(task, api_baseurl_key)  # reward is in `workflow_output`
+        # report output back to swarm remote
+        swarm_worker.end_episode(task, episode_uuid, workflow_output)
+        return
 
     executor = PeriodicDrainThreadPoolExecutor(workers=GRPO_N * REMOTE_BATCH_SIZE, auto_retry=True)
     for _ in range(NUM_EPOCH):

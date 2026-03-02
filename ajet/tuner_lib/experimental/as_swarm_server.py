@@ -708,7 +708,7 @@ def register_enable_swarm_mode_routes(
     @app.post("/update_current_batch_rollout_pool_information", response_model=BoolResponse)
     async def update_current_batch_rollout_pool_information(req: CurrentBatchRolloutPoolInformation):
         """Update the current batch rollout pool information."""
-        if VERBOSE:
+        if DEBUG:
             logger.info(f"Running /update_current_batch_rollout_pool_information")
         try:
             with shared_mem_dict_lock:

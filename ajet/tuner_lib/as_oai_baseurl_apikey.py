@@ -29,8 +29,11 @@ class OpenaiBaseUrlAndApiKey(BaseModel):
     episode_uuid: str = Field(default="episode_id", description="reserved field.")
 
     def as_agentscope_model(self, *args, **kwargs):
-        from agentscope.model import DashScopeChatModel
-        return DashScopeChatModel(model_name="AgentJet-Model", api_key=self.api_key, base_http_api_url=self.base_url)
+        from agentscope.model import OpenAIChatModel
+        return OpenAIChatModel(
+            model_name="AgentJet-Model", api_key=self.api_key,
+            client_args={"base_url": self.base_url}
+        )
 
     def as_raw_openai_sdk_client(self, *args, **kwargs):
         from openai import AsyncOpenAI
