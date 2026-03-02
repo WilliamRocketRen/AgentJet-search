@@ -132,13 +132,9 @@ class AgentJetJob:
 
 
     def build_job_from_yaml(self, yaml_path: str | None) -> dict:
-        assert self.experiment_dir is not None, "experiment_dir must be provided either in constructor or in yaml config."
         self.config_as_dict = read_ajet_hierarchical_config(
             yaml_path,
-            exp_name=self.experiment_name,
-            backbone=self.backbone,
             write_to=None,
-            exp_dir=self.experiment_dir,
         )
         self.config_as_dict = expand_ajet_hierarchical_config(self.config_as_dict, write_to=None)
         logger.info(f"Built AgentJet job config: {yaml_path}")

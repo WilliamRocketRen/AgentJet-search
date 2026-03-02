@@ -81,6 +81,8 @@ def get_official_agent_prompt(name) -> str:
 
 class ExampleWerewolves(Workflow):
     trainable_targets: List[str] | None = Field(default=["werewolf"], description="List of agents to be fine-tuned.")
+    big_external_opponent_llm_url = "http://22.17.52.4:2888/v1"
+    big_external_opponent_llm_name = "/mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen3-235B-A22B-Instruct-2507/"
 
     async def execute(self, workflow_task: WorkflowTask, tuner: AjetTuner) -> WorkflowOutput:
 
@@ -104,11 +106,11 @@ class ExampleWerewolves(Workflow):
         players = []
         for i, role in enumerate(roles):
             default_model = OpenAIChatModel(
-                model_name="/mnt/data_cpfs/model_cache/modelscope/hub/Qwen/Qwen/Qwen3-235B-A22B-Instruct-2507/",
                 stream=False,
-                client_args={"base_url": "http://22.17.52.4:2888/v1"},
                 api_key="no_api_key",
                 generate_kwargs={"temperature": 0.01},
+                model_name=self.big_external_opponent_llm_name,
+                client_args={"base_url": self.big_external_opponent_llm_url},
             )
             model_for_this_agent = tuner.as_agentscope_model(
                 agent_name=f"Player{i + 1}",    # the name of this agent

@@ -52,6 +52,8 @@ def raise_for_status_with_detail(resp):
             raise RuntimeError(f"SwarmClient error {resp.status_code} with non-JSON response: {response_text}") from e
 
 
+class SwarmServerOfflineError(Exception): ...
+
 
 class SwarmClient(object):
 
@@ -437,7 +439,7 @@ class SwarmClient(object):
         self._wait_until_status_change_to(desired_status="ENGINE.ROLLING")
         logger.success("Training engine is now ROLLING and ready.")
 
-    def _wait_until_status_change_to(self, desired_status="ENGINE.ROLLING", verbose=True):
+    def _wait_until_status_change_to(self, desired_status="ENGINE.ROLLING", verbose=True, timeout=1800):
         """
         Poll engine status until it reaches desired_status.
         Reports status every 5 seconds while waiting.
@@ -446,11 +448,19 @@ class SwarmClient(object):
             self.logger_info(f"Polling engine status until {desired_status}...")
         last_report_time = time.time()
         init_poll_time = last_report_time
+        initial_status, _ = self.get_engine_status()
 
         while True:
             try:
                 current_status, _ = self.get_engine_status()
                 current_time = time.time()
+
+                # Check if timeout has been reached
+                if current_time - init_poll_time >= timeout:
+                    raise TimeoutError(f"Timeout reached while waiting for engine status to change to {desired_status}")
+
+                if (initial_status == "ENGINE.OFFLINE") and (current_status == "ENGINE.OFFLINE"):
+                    raise SwarmServerOfflineError(f"Engine status changed from {initial_status} to OFFLINE while waiting for {desired_status}. This may indicate an error in the engine. Please check the swarm server logs for details.")
 
                 # Report status every 5 seconds
                 if current_time - last_report_time >= 30:
@@ -466,6 +476,9 @@ class SwarmClient(object):
 
                 # Wait a bit before next poll
                 time.sleep(5)
+
+            except SwarmServerOfflineError as e:
+                raise e
 
             except Exception as e:
                 logger.error(f"Error polling engine status: {e}")

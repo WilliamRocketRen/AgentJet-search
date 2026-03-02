@@ -35,17 +35,19 @@ def main():
         )
     )
 
-    # # Hand shake with remote swarm server
+    # Hand shake with remote swarm server
     swarm_worker = SwarmClient(AJET_SWARM_URL)
+    ajet_job = AgentJetJob(
+        experiment_name="math_gsm8k_grpo",
+        algorithm="grpo",
+        n_gpu=REMOTE_ALLOCATE_GPU_PER_NODE,
+        model=REMOTE_MODEL_PATH,
+        batch_size=REMOTE_BATCH_SIZE,
+        num_repeat=GRPO_N,
+    )
+    print(ajet_job.config.to_dict())
     swarm_worker.auto_sync_train_config_and_start_engine(
-        AgentJetJob(
-            experiment_name="math_gsm8k_grpo",
-            algorithm="grpo",
-            n_gpu=REMOTE_ALLOCATE_GPU_PER_NODE,
-            model=REMOTE_MODEL_PATH,
-            batch_size=REMOTE_BATCH_SIZE,
-            num_repeat=GRPO_N,
-        ),
+        ajet_job,
         force_restart=True,
     )
 

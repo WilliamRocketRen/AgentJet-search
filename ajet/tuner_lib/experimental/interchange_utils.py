@@ -111,8 +111,12 @@ VERBOSE = True
 
 def get_interchange_server_url(config):
     port = os.getenv("AJET_DAT_INTERCHANGE_PORT")
-    if config.ajet.interchange_server.interchange_server_port != 'auto':
-        port = str(int(config.ajet.interchange_server.interchange_server_port))
+    if isinstance(config, dict):
+        interchange_server_port = config.get("ajet", {}).get("interchange_server", {}).get("interchange_server_port", "auto")
+    else:
+        interchange_server_port = config.ajet.interchange_server.interchange_server_port
+    if interchange_server_port != 'auto':
+        port = str(int(interchange_server_port))
     assert port is not None, "AJET_DAT_INTERCHANGE_PORT env var must be set"
     master_node_ip = os.getenv("MASTER_NODE_IP", "localhost")
     base_url = f"http://{master_node_ip}:{port}"

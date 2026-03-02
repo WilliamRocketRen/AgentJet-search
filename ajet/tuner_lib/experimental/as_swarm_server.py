@@ -393,6 +393,7 @@ def register_enable_swarm_mode_routes(
                     main_yaml_fp,
                     env,
                     exp_config,
+                    True,  # is_swarm_server
                 ),
             )
             p.daemon = True

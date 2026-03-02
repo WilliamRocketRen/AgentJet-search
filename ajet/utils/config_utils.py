@@ -171,7 +171,7 @@ def config_safe_guard(config: dict, backbone: str) -> dict:
 
 
 def read_ajet_hierarchical_config(
-    yaml_fp, exp_name, backbone, write_to=None, exp_dir=DEFAULT_DIR, override_param_callback=None
+    yaml_fp, exp_name=None, backbone=None, write_to=None, exp_dir=None, override_param_callback=None
 ):
     if yaml_fp is None:
         config = {
@@ -193,9 +193,12 @@ def read_ajet_hierarchical_config(
     else:
         with open(yaml_fp, "r", encoding="utf-8") as file:
             config = yaml.safe_load(file)
-    config["ajet"]["experiment_name"] = exp_name
-    config["ajet"]["experiment_dir"] = os.path.join(exp_dir, exp_name)
-    config["ajet"]["backbone"] = backbone
+    if exp_name is not None:
+        config["ajet"]["experiment_name"] = exp_name
+    if (exp_dir is not None) and (exp_name is not None):
+        config["ajet"]["experiment_dir"] = os.path.join(exp_dir, exp_name)
+    if backbone is not None:
+        config["ajet"]["backbone"] = backbone
 
     # remove extra config of verl for trinity
     if backbone == "debug":
@@ -324,7 +327,7 @@ def prepare_experiment_config(yaml_path, exp_dir, backbone, override_param_callb
 
     ## 4. edit new yaml
     config = read_ajet_hierarchical_config(
-        yaml_backup_dst, exp_name, backbone, write_to=yaml_backup_dst, exp_dir=exp_dir, override_param_callback=override_param_callback
+        yaml_backup_dst, exp_name=exp_name, backbone=backbone, write_to=yaml_backup_dst, exp_dir=exp_dir, override_param_callback=override_param_callback
     )
     config_final = expand_ajet_hierarchical_config(config, write_to=yaml_backup_dst)
 
