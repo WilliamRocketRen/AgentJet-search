@@ -113,8 +113,8 @@ class SwarmClient(object):
 
         if self._agent_jet_job:
             # check and raise early errors when possible
-            assert self._agent_jet_job.sample_collection_method == "rollout_until_finish_enough_tasks", \
-                f"Current sample collection method ({self._agent_jet_job.sample_collection_method}) does not support throttle policy."
+            assert self._agent_jet_job.swarm_mode_sample_collection_method == "rollout_until_finish_enough_tasks", \
+                f"Current sample collection method ({self._agent_jet_job.swarm_mode_sample_collection_method}) does not support throttle policy."
 
         # only_this_client_uuid = throttle_policy.throttle_method in ["Task_Ratio_Limit"]
         only_this_client_uuid = True

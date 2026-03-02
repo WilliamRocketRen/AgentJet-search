@@ -284,7 +284,7 @@ ajet:
   # the experimental ZeroMQ interchange server feature that allows `tuner.as_oai_baseurl_apikey` feature
   enable_swarm_mode: False
   # both swarm / oai share the same interchange server
-  enable_experimental_interchange_server: False
+  enable_interchange_server: False
   # interchange server configuration
   interchange_server:
     interchange_method: 'ipc' # options: 'tcp' (multi-nodes) or  'ipc' (1 node)

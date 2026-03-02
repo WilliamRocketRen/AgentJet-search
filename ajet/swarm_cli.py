@@ -24,8 +24,8 @@ def start_swarm_server(env, config, port):
     assert config.ajet.enable_swarm_mode, (
         "Please enable_swarm_mode in config to start swarm server."
     )
-    assert config.ajet.enable_experimental_interchange_server, (
-        "Please enable_experimental_interchange_server in config to start swarm server."
+    assert config.ajet.enable_interchange_server, (
+        "Please enable_interchange_server in config to start swarm server."
     )
 
     # Set the port in the config
