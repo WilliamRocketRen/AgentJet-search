@@ -212,7 +212,7 @@ class SwarmClient(object):
 
     def _begin_episode_auto_retry(self, discard_episode_timeout=240, episode_type="train", throttle_policy: SwarmThrottlePolicy|None = None) -> Tuple[str, OpenaiBaseUrlAndApiKey]:
         # max_episode_time: when an episode has **lasted** for more than X seconds, it will be terminated **locally** by client (call `end_episode` will be re-route to `abort_episode`)
-        max_episode_time = 2*discard_episode_timeout
+        max_episode_time = 8*discard_episode_timeout
 
         status, status_json = self.get_engine_status()  # warm up connection and log the status
         if status not in ["ENGINE.ROLLING"]:
@@ -318,13 +318,13 @@ class SwarmClient(object):
         if episode_uuid in self.record_episode_expire_time:
             remain_time = self.record_episode_expire_time.pop(episode_uuid, 0) - time.time()
             if remain_time < 0:
-                logger.warning(f"Episode {episode_uuid} has expired (expired {-remain_time} seconds ago). Please use a larger `discard_episode_timeout` and `max_episode_time` when `begin_episode`. Skipping end_episode.")
+                logger.warning(f"Episode {episode_uuid} has expired (expired {-remain_time} seconds ago). Please use a larger `discard_episode_timeout` when `begin_episode`. Skipping end_episode.")
                 # send abort signal to server to clean up episode
                 self.abort_episode(episode_uuid)
                 return
         else:
             # send abort signal to server to clean up episode
-            logger.warning(f"Episode {episode_uuid} has expired (expired at least {CLEAN_RECORD_TIMEOUT} seconds ago). Please use a larger `discard_episode_timeout` and `max_episode_time` when `begin_episode`. Skipping end_episode.")
+            logger.warning(f"Episode {episode_uuid} has expired (expired at least {CLEAN_RECORD_TIMEOUT} seconds ago). Please use a larger `discard_episode_timeout` when `begin_episode`. Skipping end_episode.")
             self.abort_episode(episode_uuid)
             return
 
@@ -459,7 +459,7 @@ class SwarmClient(object):
                 if current_time - init_poll_time >= timeout:
                     raise TimeoutError(f"Timeout reached while waiting for engine status to change to {desired_status}")
 
-                if (initial_status == "ENGINE.OFFLINE") and (current_status == "ENGINE.OFFLINE"):
+                if (initial_status == "ENGINE.OFFLINE") and (current_status == "ENGINE.OFFLINE") and (desired_status!="ENGINE.OFFLINE"):
                     raise SwarmServerOfflineError(f"Engine status changed from {initial_status} to OFFLINE while waiting for {desired_status}. This may indicate an error in the engine. Please check the swarm server logs for details.")
 
                 # Report status every 5 seconds

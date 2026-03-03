@@ -9,6 +9,7 @@ from urllib.parse import quote
 import numpy as np
 import torch
 import threading
+from math import ceil
 from loguru import logger
 from tensordict import TensorDict
 from torch.nn.utils.rnn import pad_sequence
@@ -172,11 +173,11 @@ class DynamicRolloutManager(BaseRolloutManager):
         Build a pool of threads to run context trackers in parallel,
         each thread re-spawn after complete, until reaching conditions to stop.
         """
-
+        # from ajet import bp; bp("SWARM")
         tracker_array: List[SingleAgentContextTracker] = []
         rollout_n = self.rollout_n
         n_batch_task = len(tasks)
-        n_task = min(len(tasks), self.max_parallel // rollout_n)
+        n_task = min(len(tasks), ceil(self.max_parallel / rollout_n))
         assert n_task > 0, f"n_task is not valid, n_task = min(len(tasks), self.max_parallel // rollout_n) = {n_task}"
         self.current_token_count_time = time.time()
 
@@ -370,20 +371,20 @@ class DynamicRolloutManager(BaseRolloutManager):
             self._write_swarm_rollout_dynamic_log(observation_window)
             meet_stop_condition_after_new_results = stop_condition(completed_task_id_map_ct)
             if meet_stop_condition_after_new_results:
-                print("Sending soft stop signal to all threads...")
+                logger.info("Sending soft stop signal to all threads...")
                 stop_all_threads_soft()
                 break
 
         # wait for all threads to complete
-        print('Finalizing all threads...')
+        logger.info('Finalizing all threads...')
         executor.shutdown(wait=True)
 
         # stop all threads hard
-        print("Sending hard stop signal to all threads...")
+        logger.info("Sending hard stop signal to all threads...")
         stop_all_threads_hard()
 
         # build tracker_array
-        print('Collecting results...')
+        logger.info('Collecting results...')
         for ct_list in completed_task_id_map_ct.values():
             tracker_array.extend(ct_list)
 

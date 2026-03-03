@@ -334,12 +334,9 @@ def register_enable_swarm_mode_routes(
             yaml_str = shared_mem_dict["train_config_yaml"]
             config_dict = yaml_module.safe_load(yaml_str)
             backbone = config_dict.get("ajet", {}).get("backbone", "verl")
-            DEFAULT_DIR = "saved_experiments"
-            exp_dir_final = config_dict.get("ajet", {}).get("experiment_dir", DEFAULT_DIR)
-            if exp_dir_final != DEFAULT_DIR:
-                # remove last dir level if possible
-                exp_dir_final = os.path.dirname(exp_dir_final)
-
+            exp_base_dir = os.path.dirname(
+                config_dict.get("ajet", {}).get("experiment_dir", "saved_experiments")
+            )
 
             # Save YAML to temporary file
             with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml") as temp_file:
@@ -351,7 +348,6 @@ def register_enable_swarm_mode_routes(
             args = SimpleNamespace(
                 conf=main_yaml_fp,
                 backbone=backbone,
-                exp_dir=exp_dir_final,
                 with_logview=False,
                 debug=False,
             )
@@ -367,7 +363,12 @@ def register_enable_swarm_mode_routes(
                 return config
 
             # Finalize experiment config
-            main_yaml_fp, exe_exp_base, exp_name, exp_config = prepare_experiment_config(main_yaml_fp, exp_dir_final, backbone, override_param_callback)
+            main_yaml_fp, exe_exp_base, exp_name, exp_config = prepare_experiment_config(
+                yaml_path=main_yaml_fp,
+                exp_base_dir=exp_base_dir,
+                backbone=backbone,
+                override_param_callback=override_param_callback,
+            )
 
             # Setup environment variables
             env, exp_config = setup_environment_vars(args, exp_config, main_yaml_fp)

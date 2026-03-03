@@ -168,7 +168,7 @@ def main():
         from ajet.utils.swarm_overwatch import start_overwatch
 
         logger.info(f"Starting Swarm Overwatch for server: {args.swarm_overwatch}")
-        start_overwatch(args.swarm_overwatch, refresh_interval=1.0)
+        start_overwatch(args.swarm_overwatch, refresh_interval=2.0)
         return
 
     # Enforce GPU availability and free memory threshold before proceeding
@@ -204,7 +204,6 @@ def main():
 
     # read configuration from yaml
     exp_config = None
-    exp_dir = args.exp_dir or DEFAULT_DIR
     if args.swarm_server and (not args.conf):
         args.conf = os.path.abspath(
             os.path.join(
@@ -215,6 +214,7 @@ def main():
             "Please provide a valid config file for swarm server mode."
         )
     if args.conf:
+        exp_dir = args.exp_dir or DEFAULT_DIR
         yaml_path = args.conf
         (
             main_yaml_fp,
@@ -222,7 +222,10 @@ def main():
             exp_name,
             exp_config,
         ) = prepare_experiment_config(
-            yaml_path, exp_dir, args.backbone, storage=(not args.swarm_server)
+            yaml_path=yaml_path,
+            exp_base_dir=exp_dir,
+            backbone=args.backbone,
+            storage=(not args.swarm_server)
         )
 
     # setup environment variables

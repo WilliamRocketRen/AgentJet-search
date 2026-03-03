@@ -2,7 +2,7 @@
 ajet:
   project_name: "ajet_default_project"
   experiment_name: "read_yaml_name"
-  experiment_dir: "auto"  # {exp-dir}/{experiment_name}
+  experiment_dir: "{exp-dir}/{experiment_name}"  # {exp-dir}/{experiment_name}
   backbone: verl
 
   model:
@@ -12,6 +12,10 @@ ajet:
   rollout:
     # the path to the workflow class
     user_workflow: null
+    # maximum number of parallel environments / simulate workers
+    max_env_worker: 128
+    # how many times a task should be repeated
+    num_repeat: 4
 
   task_reader:
     type: random_dummy # `env_service` or `jsonl_dataset_file` or `huggingface_dat_repo` or `data_generation` or `random_dummy`
@@ -52,12 +56,6 @@ ajet:
     # how many tasks per training batch
     train_batch_size: 32
     # [Hint]: The final number of samples per update will be: N_{sample} = (data.train_batch_size * rollout.num_repeat * rollout.multi_turn.expected_steps)
-
-  rollout:
-    # maximum number of parallel environments / simulate workers
-    max_env_worker: 128
-    # how many times a task should be repeated
-    num_repeat: 4
 
   trainer_common:
     logger: tensorboard

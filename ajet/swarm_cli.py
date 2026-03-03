@@ -61,7 +61,10 @@ def cmd_start(args):
         exp_name,
         exp_config,
     ) = prepare_experiment_config(
-        yaml_path, exp_dir, "verl", storage=False
+        yaml_path=yaml_path,
+        exp_base_dir=exp_dir,
+        backbone="verl",
+        storage=False
     )
 
     # Setup environment variables
@@ -73,7 +76,6 @@ def cmd_start(args):
             self.swarm_server = True
             self.swarm_overwatch = ""
             self.debug = ""
-
     swarm_args = SwarmArgs(args.conf, "verl", args.exp_dir)
     env, exp_config = setup_environment_vars(swarm_args, exp_config, main_yaml_fp)
 
@@ -131,9 +133,9 @@ def main():
     parser_overwatch.add_argument(
         "--refresh-interval",
         type=float,
-        default=1.0,
+        default=2.0,
         required=False,
-        help="Refresh interval in seconds (default: 1.0)",
+        help="Refresh interval in seconds (default: 2.0)",
     )
     parser_overwatch.set_defaults(func=cmd_overwatch)
 

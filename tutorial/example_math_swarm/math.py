@@ -28,7 +28,8 @@ def main():
         reader_type = "huggingface_dat_repo",
         reader_config = AjetTaskReader(
             huggingface_dat_repo = HuggingfaceDatRepo(
-                dataset_path = "/root/agentjet/benchmark_datasets/dataset/gsm8k/socratic",
+                dataset_path = '/mnt/data_cpfs/model_cache/modelscope/dataset/openai/gsm8k/main',
+                # dataset_path = "/root/agentjet/benchmark_datasets/dataset/gsm8k/socratic",
                 # dataset_path = "openai/gsm8k",
                 # dataset_name = "main",
             )

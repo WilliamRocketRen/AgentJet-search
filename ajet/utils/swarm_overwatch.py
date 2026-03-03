@@ -23,13 +23,13 @@ from ajet.tuner_lib.experimental.swarm_overwatch_utils import CurrentBatchRollou
 class SwarmOverwatch:
     """Real-time monitoring interface for swarm rollout pool"""
 
-    def __init__(self, server_url: str, refresh_interval: float = 1.0):
+    def __init__(self, server_url: str, refresh_interval: float = 2.0):
         """
         Initialize the overwatch monitor
 
         Args:
             server_url: Base URL of the swarm server (e.g., http://localhost:10086)
-            refresh_interval: Refresh interval in seconds (default: 1.0)
+            refresh_interval: Refresh interval in seconds (default: 2.0)
         """
         self.server_url = server_url.rstrip("/")
         self.refresh_interval = refresh_interval
@@ -480,13 +480,13 @@ class SwarmOverwatch:
             )
 
 
-def start_overwatch(server_url: str, refresh_interval: float = 1.0):
+def start_overwatch(server_url: str, refresh_interval: float = 2.0):
     """
     Start the swarm overwatch monitoring interface
 
     Args:
         server_url: Base URL of the swarm server
-        refresh_interval: Refresh interval in seconds (default: 1.0)
+        refresh_interval: Refresh interval in seconds (default: 2.0)
     """
     overwatch = SwarmOverwatch(server_url, refresh_interval)
     overwatch.run()
