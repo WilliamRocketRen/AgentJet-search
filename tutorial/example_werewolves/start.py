@@ -4,6 +4,7 @@
 """The main entry point for the werewolf game."""
 
 from typing import List
+import agentscope
 import numpy as np
 import dotenv
 dotenv.load_dotenv()
@@ -86,6 +87,7 @@ class ExampleWerewolves(Workflow):
 
     async def execute(self, workflow_task: WorkflowTask, tuner: AjetTuner) -> WorkflowOutput:
 
+        assert agentscope.__version__ == "1.0.7", "AgentScope has too many bugs across versions, please use version 1.0.7 for werewolves example."
         # ensure trainable targets is legal
         assert self.trainable_targets is not None, "trainable_targets cannot be None in ExampleWerewolves (because we want to demonstrate a explicit multi-agent case)."
 
