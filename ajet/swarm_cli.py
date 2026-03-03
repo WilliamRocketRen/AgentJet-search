@@ -42,7 +42,7 @@ def start_swarm_server(env, config, port):
 def cmd_start(args):
     """Handle the 'start' subcommand."""
     # Use default config if not provided
-    exp_dir = args.exp_dir or DEFAULT_DIR
+    exp_base_dir = args.exp_dir or DEFAULT_DIR
     if not args.conf:
         args.conf = os.path.abspath(
             os.path.join(
@@ -62,7 +62,7 @@ def cmd_start(args):
         exp_config,
     ) = prepare_experiment_config(
         yaml_path=yaml_path,
-        exp_base_dir=exp_dir,
+        exp_base_dir=exp_base_dir,
         backbone="verl",
         storage=False
     )

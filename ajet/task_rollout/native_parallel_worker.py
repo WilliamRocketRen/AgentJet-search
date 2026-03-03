@@ -173,7 +173,7 @@ class DynamicRolloutManager(BaseRolloutManager):
         Build a pool of threads to run context trackers in parallel,
         each thread re-spawn after complete, until reaching conditions to stop.
         """
-        # from ajet import bp; bp("SWARM")
+
         tracker_array: List[SingleAgentContextTracker] = []
         rollout_n = self.rollout_n
         n_batch_task = len(tasks)

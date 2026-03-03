@@ -214,7 +214,7 @@ def main():
             "Please provide a valid config file for swarm server mode."
         )
     if args.conf:
-        exp_dir = args.exp_dir or DEFAULT_DIR
+        exp_base_dir = args.exp_dir or DEFAULT_DIR
         yaml_path = args.conf
         (
             main_yaml_fp,
@@ -223,7 +223,7 @@ def main():
             exp_config,
         ) = prepare_experiment_config(
             yaml_path=yaml_path,
-            exp_base_dir=exp_dir,
+            exp_base_dir=exp_base_dir,
             backbone=args.backbone,
             storage=(not args.swarm_server)
         )
