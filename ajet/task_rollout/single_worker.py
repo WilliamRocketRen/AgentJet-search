@@ -72,6 +72,10 @@ class BaseRolloutManager:
             max_llm_retries=max_llm_retries,
         )
 
+        # Memory leak tracking
+        self._memory_snapshot = None
+        self._tracemalloc_started = False
+
     @retry_with_backoff(max_retry_attr="max_llm_retries")
     def rollout_env_worker(
         self,
