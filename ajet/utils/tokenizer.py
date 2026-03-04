@@ -19,6 +19,9 @@ def cleanup_messages(messages: List[Dict]) -> List[Dict]:
                     pass
     return messages_copied
 
+# Cache storage
+_cache = {}
+
 
 def ajet_apply_chat_template(
     tokenizer,
@@ -28,16 +31,39 @@ def ajet_apply_chat_template(
     tokenize: bool = True,
 ):
     conversation = cleanup_messages(conversation)
+
+    # Create cache key by hashing all inputs
+    cache_key = (
+        id(tokenizer),
+        hash(json.dumps(conversation, sort_keys=True)),
+        hash(json.dumps(tools, sort_keys=True)) if tools else 0,
+        add_generation_prompt,
+        tokenize,
+    )
+
+    # Check cache
+    if cache_key in _cache:
+        return _cache[cache_key]
+
+    # Compute result
     if tools:
-        return tokenizer.apply_chat_template(
+        result = tokenizer.apply_chat_template(
             conversation,
             tools,
             add_generation_prompt=add_generation_prompt,
             tokenize=tokenize,
         )
     else:
-        return tokenizer.apply_chat_template(
+        result = tokenizer.apply_chat_template(
             conversation,
             tokenize=tokenize,
             add_generation_prompt=add_generation_prompt,
         )
+
+    # Store in cache (implement LRU eviction if cache gets too large)
+    if len(_cache) >= 1024:
+        # Remove oldest item (first inserted)
+        _cache.pop(next(iter(_cache)))
+
+    _cache[cache_key] = result
+    return result

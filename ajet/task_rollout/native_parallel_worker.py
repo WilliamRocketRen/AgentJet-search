@@ -233,7 +233,7 @@ class DynamicRolloutManager(BaseRolloutManager):
                     f"Too many cached episodes [{total_completed_episodes}] has exceeded the max cached episodes [{self.config.ajet.swarm_mode_sample_collection_max_cached_episodes}] "
                     f"Deleting cached episodes to release memory..."
                 )
-                completed_task_id_map_ct = {}
+                completed_task_id_map_ct.clear()
             return (total_completed_tasks >= n_batch_task)
 
         def enough_non_dummy_task_stop_condition(completed_task_id_map_ct) -> bool:
@@ -258,7 +258,7 @@ class DynamicRolloutManager(BaseRolloutManager):
                     f"Too many cached episodes [{total_completed_episodes}] has exceeded the max cached episodes [{self.config.ajet.swarm_mode_sample_collection_max_cached_episodes}] "
                     f"Deleting cached episodes to release memory..."
                 )
-                completed_task_id_map_ct = {}
+                completed_task_id_map_ct.clear()
             return (total_completed_non_dummy_tasks >= n_batch_task)
 
         # select stop condition function based on config
@@ -387,6 +387,7 @@ class DynamicRolloutManager(BaseRolloutManager):
         logger.info('Collecting results...')
         for ct_list in completed_task_id_map_ct.values():
             tracker_array.extend(ct_list)
+        completed_task_id_map_ct.clear()
 
         # TODO: support multi-step reward
         task_success_rate = np.mean(
@@ -402,7 +403,6 @@ class DynamicRolloutManager(BaseRolloutManager):
 
         update_rollout_result_array_preview(observation_window, completed_task_id_map_ct)
         self._write_swarm_rollout_dynamic_log(observation_window)
-
         return tracker_array
 
 

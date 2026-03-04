@@ -37,11 +37,12 @@ class SwarmOverwatch:
         self.last_update_time = None
         self.error_count = 0
         self.total_requests = 0
+        self._httpx_client = httpx.Client(timeout=5.0)
 
     def fetch_pool_info(self) -> Optional[CurrentBatchRolloutPoolInformation]:
         """Fetch current batch rollout pool information from server"""
         try:
-            response = httpx.get(
+            response = self._httpx_client.get(
                 f"{self.server_url}/get_current_batch_rollout_pool_information",
                 timeout=5.0,
             )

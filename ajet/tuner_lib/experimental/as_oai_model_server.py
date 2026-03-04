@@ -428,6 +428,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
 
     # polling for server ready
     start_time = time.time()
+    _httpx_client = httpx.Client(timeout=0.5)
     while True:
         if interchange_server and interchange_server.exitcode is not None:
             logger.error(f"Interchange server subprocess failed to start. Return code: {interchange_server.exitcode}")
@@ -437,7 +438,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
             logger.error(msg)
             raise RuntimeError(msg)
         try:
-            if httpx.get(health_url, timeout=0.5).status_code == 200:
+            if _httpx_client.get(health_url).status_code == 200:
                 break
         except Exception:
             # keep waiting
@@ -462,7 +463,7 @@ def start_interchange_server(config, blocking=False, env={}) -> int:
                 interchange_server.join()
         except KeyboardInterrupt:
             logger.info("Shutting down interchange server...")
-            try: httpx.post(f"http://127.0.0.1:{port}/stop_engine", timeout=8).status_code
+            try: _httpx_client.post(f"http://127.0.0.1:{port}/stop_engine", timeout=8).status_code
             except Exception: pass
 
             if interchange_server:

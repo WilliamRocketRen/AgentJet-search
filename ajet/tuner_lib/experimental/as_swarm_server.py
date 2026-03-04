@@ -338,7 +338,8 @@ def register_enable_swarm_mode_routes(
             experiment_dir = config_dict.get("ajet", {}).get("experiment_dir", DEFAULT_DIR)
             if experiment_dir == "auto":
                 exp_base_dir = DEFAULT_DIR
-            exp_base_dir = os.path.dirname(os.path.abspath(experiment_dir))
+            else:
+                exp_base_dir = os.path.dirname(os.path.abspath(experiment_dir))
 
             # Save YAML to temporary file
             with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml") as temp_file:

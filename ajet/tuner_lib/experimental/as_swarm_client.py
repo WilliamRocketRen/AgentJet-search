@@ -71,6 +71,8 @@ class SwarmClient(object):
         self._agent_jet_job = None
         # throttle
         self._recent_seen_tasks = []
+        # reuse httpx client to avoid creating SSL context repeatedly
+        self._http_client = httpx.Client(timeout=GENERAL_TIMEOUT)
 
     def logger_info(self, message):
         # logger with de-duplication within 1 second to prevent log flooding
@@ -252,10 +254,9 @@ class SwarmClient(object):
                     discard_episode_timeout=discard_episode_timeout,
                     throttle_policy=throttle_policy
                 )
-                resp = httpx.post(
+                resp = self._http_client.post(
                     f"{self.server_url}/claim_episode",
-                    json=req_obj.model_dump(),
-                    timeout=GENERAL_TIMEOUT
+                    json=req_obj.model_dump()
                 )
                 raise_for_status_with_detail(resp)
                 data = ClaimEpisodeResponse.model_validate(resp.json())
@@ -337,10 +338,9 @@ class SwarmClient(object):
             task_id=task_id
         )
 
-        resp = httpx.post(
+        resp = self._http_client.post(
             f"{self.server_url}/end_episode",
-            json=req_obj.model_dump(),
-            timeout=GENERAL_TIMEOUT
+            json=req_obj.model_dump()
         )
         raise_for_status_with_detail(resp)
         data = EndEpisodeResponse.model_validate(resp.json())
@@ -366,10 +366,9 @@ class SwarmClient(object):
                 task_id=""
             )
 
-            resp = httpx.post(
+            resp = self._http_client.post(
                 f"{self.server_url}/abort_episode",
-                json=req_obj.model_dump(),
-                timeout=GENERAL_TIMEOUT
+                json=req_obj.model_dump()
             )
             raise_for_status_with_detail(resp)
             data = EndEpisodeResponse.model_validate(resp.json())
@@ -399,10 +398,9 @@ class SwarmClient(object):
 
             req_obj = SyncTrainConfigRequest(yaml_as_string=yaml_str)
 
-            resp = httpx.post(
+            resp = self._http_client.post(
                 f"{self.server_url}/sync_train_config",
-                json=req_obj.model_dump(),
-                timeout=GENERAL_TIMEOUT
+                json=req_obj.model_dump()
             )
             raise_for_status_with_detail(resp)
             self.logger_info("Synced train config to Swarm server")
@@ -422,7 +420,7 @@ class SwarmClient(object):
             raise RuntimeError(f"Cannot start engine when engine is NOT ENGINE.OFFLINE. (current status: {current_status})")
 
         # Send start engine request
-        resp = httpx.post(
+        resp = self._http_client.post(
             f"{self.server_url}/start_engine",
             json={},
             timeout=600
@@ -487,7 +485,7 @@ class SwarmClient(object):
     @cache_with_ttl(ttl=0.5)
     def get_engine_status(self) -> Tuple[str, dict]:
         try:
-            resp = httpx.get(
+            resp = self._http_client.get(
                 f"{self.server_url}/get_engine_status",
                 timeout=10
             )
@@ -512,7 +510,7 @@ class SwarmClient(object):
                 client_uuid=self.client_uuid,
                 episode_uuid=episode_uuid
             )
-            resp = httpx.post(
+            resp = self._http_client.post(
                 f"{self.server_url}/can_continue_episode",
                 json=req_obj.model_dump(),
                 timeout=10
@@ -526,7 +524,7 @@ class SwarmClient(object):
 
     def get_episode_buffer(self) -> List[EpisodeStatus]:
         try:
-            resp = httpx.post(
+            resp = self._http_client.post(
                 f"{self.server_url}/get_episode_buffer",
                 json={},
                 timeout=10
@@ -585,7 +583,7 @@ class SwarmClient(object):
             self.logger_info("Engine is already OFFLINE. No action needed.")
             return
 
-        resp = httpx.post(
+        resp = self._http_client.post(
             f"{self.server_url}/stop_engine",
             json={},
             timeout=600
@@ -605,7 +603,7 @@ class SwarmClient(object):
         Returns statistics about completed episodes, tasks, and progress.
         """
         try:
-            resp = httpx.get(
+            resp = self._http_client.get(
                 f"{self.server_url}/get_current_batch_rollout_pool_information",
                 timeout=10
             )
