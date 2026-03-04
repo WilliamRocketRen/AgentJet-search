@@ -2,7 +2,7 @@
 ajet:
   project_name: "ajet_default_project"
   experiment_name: "read_yaml_name"
-  experiment_dir: "{exp-dir}/{experiment_name}"  # {exp-dir}/{experiment_name}
+  experiment_dir: "auto"  # {exp-dir}/{experiment_name}
   backbone: verl # `debug` or `trinity` or `verl`
 
 

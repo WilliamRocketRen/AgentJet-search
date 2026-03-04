@@ -131,23 +131,36 @@ class InterchangeClient:
                 # begin to run the llm request, monitored by context tracker
                 # we re-use previously created thread for best performance
                 if DEBUG: logger.info(f"[client] {self.episode_uuid} | before asyncio run self.llm_infer")
+
+                # Check if there's a running event loop
                 try:
                     loop = asyncio.get_running_loop()
-                except:
+                    created_new_loop = False
+                except RuntimeError:
+                    # No running loop, create a new one
                     loop = asyncio.new_event_loop()
-                context_tracker_executor = SharedInferenceTrackerThreadExecutor(self.max_inference_tracker_threads).get_shared_executor()
-                future = loop.run_in_executor(
-                    context_tracker_executor,
-                    asyncio.run,
-                    self.llm_proxy_with_tracker.chat_completion_request(
-                        req=parsed_msg.completion_request,
-                        timeline_uuid=parsed_msg.timeline_uuid,
-                        agent_name=parsed_msg.agent_name,
-                        target_tag=parsed_msg.target_tag,
-                        episode_uuid=parsed_msg.episode_uuid,
+                    asyncio.set_event_loop(loop)
+                    created_new_loop = True
+
+                try:
+                    context_tracker_executor = SharedInferenceTrackerThreadExecutor(self.max_inference_tracker_threads).get_shared_executor()
+                    future = loop.run_in_executor(
+                        context_tracker_executor,
+                        asyncio.run,
+                        self.llm_proxy_with_tracker.chat_completion_request(
+                            req=parsed_msg.completion_request,
+                            timeline_uuid=parsed_msg.timeline_uuid,
+                            agent_name=parsed_msg.agent_name,
+                            target_tag=parsed_msg.target_tag,
+                            episode_uuid=parsed_msg.episode_uuid,
+                        )
                     )
-                )
-                result = loop.run_until_complete(future).model_dump_json()  # type: ignore
+                    result = loop.run_until_complete(future).model_dump_json()  # type: ignore
+                finally:
+                    # Clean up the event loop if we created it
+                    if created_new_loop:
+                        loop.close()
+                        asyncio.set_event_loop(None)
 
                 if DEBUG: logger.info(f"[client] {self.episode_uuid} | before send_string (send llm call result)")
 
