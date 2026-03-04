@@ -24,6 +24,7 @@ import httpx
 
 from loguru import logger
 from pydantic import BaseModel
+from functools import lru_cache
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
@@ -63,6 +64,9 @@ SERVER_SHUTDOWN_EVENT = threading.Event()
 context = zmq.Context()
 atexit.register(context.term)
 
+@lru_cache(maxsize=128)
+def ep_key(episode_uuid: str) -> str:
+    return f"episodes-{episode_uuid}"
 
 def get_app(max_fastapi_threads: int = 512, enable_swarm_mode=False, shared_mem_dict=None, shared_mem_dict_lock=None) -> Tuple[FastAPI, Optional[Coroutine]]:
 
@@ -100,6 +104,14 @@ def get_app(max_fastapi_threads: int = 512, enable_swarm_mode=False, shared_mem_
 
         result_str = ""
         for _ in range(50):  # max 5 minutes wait
+
+            if enable_swarm_mode:
+                assert shared_mem_dict is not None
+                ep_stat = shared_mem_dict[ep_key(episode_uuid)]
+                episode_status = ep_stat.episode_status
+                if episode_status != "claimed":
+                    raise HTTPException(status_code=404, detail="The episode is not claimed, cannot accept new requests.")
+
             try:
                 if DEBUG: logger.info(f"[server] episode_uuid: {episode_uuid} | recv_string begin.")
 

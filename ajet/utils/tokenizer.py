@@ -1,5 +1,6 @@
 import copy
 import json
+import threading
 from typing import Dict, List
 
 
@@ -21,6 +22,7 @@ def cleanup_messages(messages: List[Dict]) -> List[Dict]:
 
 # Cache storage
 _cache = {}
+_cache_lock = threading.Lock()
 
 
 def ajet_apply_chat_template(
@@ -41,11 +43,12 @@ def ajet_apply_chat_template(
         tokenize,
     )
 
-    # Check cache
-    if cache_key in _cache:
-        return _cache[cache_key]
+    # Check cache with thread safety
+    with _cache_lock:
+        if cache_key in _cache:
+            return _cache[cache_key]
 
-    # Compute result
+    # Compute result (time consuming) - outside lock to avoid blocking other threads
     if tools:
         result = tokenizer.apply_chat_template(
             conversation,
@@ -60,10 +63,16 @@ def ajet_apply_chat_template(
             add_generation_prompt=add_generation_prompt,
         )
 
-    # Store in cache (implement LRU eviction if cache gets too large)
-    if len(_cache) >= 1024:
-        # Remove oldest item (first inserted)
-        _cache.pop(next(iter(_cache)))
+    # Store in cache with thread safety (implement LRU eviction if cache gets too large)
+    with _cache_lock:
+        if len(_cache) >= 1024:
+            # Remove oldest item (first inserted)
+            try:
+                _cache.pop(next(iter(_cache)))
+            except KeyError:
+                # Cache was modified by another thread, which is fine
+                pass
 
-    _cache[cache_key] = result
+        _cache[cache_key] = result
+
     return result
