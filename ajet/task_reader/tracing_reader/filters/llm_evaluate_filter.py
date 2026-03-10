@@ -1,10 +1,15 @@
 import os
+from loguru import logger
 from typing import Iterable, List
 
-from agentscope.agent import ReActAgent
-from agentscope.formatter import DashScopeMultiAgentFormatter
-from agentscope.message import Msg
-from agentscope.model import DashScopeChatModel
+try:
+    from agentscope.agent import ReActAgent
+    from agentscope.formatter import DashScopeMultiAgentFormatter
+    from agentscope.message import Msg
+    from agentscope.model import DashScopeChatModel
+except Exception as e:
+    logger.info(f"Agentscope import error. Error: {e}")
+
 from pydantic import BaseModel, Field
 
 from ajet.schema.task import Task

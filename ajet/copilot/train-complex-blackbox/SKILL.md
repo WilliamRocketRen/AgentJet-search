@@ -10,18 +10,16 @@ license: Complete terms in LICENSE.txt
 This is not 100% necessary, but it can help a lot in debugging in step 1.
 If user has not given a API, ask user to give your one.
 
+
 By default, the code you write should be located at ./tutorial/opencode_build_xxxxxx/*.py
-
-If the user provides a github project, first thing you should do is to see whether this project contain SKILL.md, if it does, read it carefully.
-
 
 ## 1. Initial Programming
 
 ### Writing dataset collector (`get_training_dataset_item_list.py`)
 - `get_training_dataset_item_list.py`: Returns a list of training data items. Maybe a list of training tasks, each item is a string identifier of a training task, or a dict containing necessary information for the training task.
 
-### Episode Runner (`run_episode.py`)
-- `run_episode.py`:
+### Episode Runner (`run_episode_once.py`)
+- `run_episode_once.py`:
 
   - Argument Parser: takes (training data item identifier + api-key + base-url) as input, model-name is not required, you can make up a model name because we ignore it.
 
@@ -35,7 +33,6 @@ If the user provides a github project, first thing you should do is to see wheth
 ### Test
 
 Remember to test these two parts before moving to step 2, make sure they work as expected.
-You must test these two parts before moving to step 2, make sure they work as expected.
 
 
 
@@ -58,7 +55,7 @@ from ajet.task_reader import RouterTaskReader
 from ajet.utils.thread_executors import PeriodicDrainThreadPoolExecutor
 from ajet.tuner_lib.as_oai_baseurl_apikey import OpenaiBaseUrlAndApiKey
 from ajet.default_config.ajet_default import AjetTaskReader, HuggingfaceDatRepo
-from ajet.tuner_lib.experimental.as_swarm_client import SwarmClient
+from ajet.tuner_lib.experimental.swarm_client import SwarmClient
 
 # python -m tutorial.example_math_swarm.math
 
@@ -144,7 +141,7 @@ if __name__ == "__main__":
 It is very clear now, your job in step 2 is to:
 
 - use `get_training_dataset_item_list.py` to generate `List[Task]` (`from ajet.schema.task import Task`)
-- use `run_episode.py` to execute a single episode and place it in `execute_agent` function
+- use `run_episode_once.py` to execute a single episode and place it in `execute_agent` function
 
 
 ## 3. Simplify your code and fix bugs
@@ -154,10 +151,11 @@ before moving to step 4, you can simplify your code and fix bugs to make sure it
 
 ## 4. Training
 
-Finally, you can start training. （DO THIS ONLY WHEN THE USER HAS PROVIDED a server swarm-url, or if user has powerful GPUs locally）
+Finally, you can start training.
 
 Run `ajet-swarm start` to start training server (if the user has already installed agentjet swarm environment),
 if the user has docker environment, you can also refer to `docs/en/ajet-swarm-docker.md` to start a AgentSwarm docker container.
+If the user can provider the ssh connection to the GPU server / cluster, you can send the `ajet-swarm start` command to the remote server via ssh to start the swarm server, the port forward `10086` port (default agentjet swarm port) to user local machine.
 
 Create a duplication of `agent_roll.py` named `agent_roll_one_episode_debug.py`, and modify it to only run one episode, this can help you debug whether the episode runner and reward function work as expected.
 

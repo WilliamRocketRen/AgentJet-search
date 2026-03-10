@@ -67,6 +67,8 @@ class SwarmClient(object):
         # better logging management
         self._last_second_print_buffer: dict[str, float] = {}
         self._begin_episode_lock = threading.Lock()
+        self._http_client_lock = threading.Lock()
+        self._http_client = self._refresh_http_client()
         # record last registered AgentJetJob
         self._agent_jet_job = None
         # throttle
@@ -94,6 +96,30 @@ class SwarmClient(object):
 
         return
 
+    def _refresh_http_client(self):
+        """Refresh the HTTP client by closing the old one and creating a new one."""
+        with self._http_client_lock:
+            try:
+                self._http_client.close()
+            except Exception:
+                pass  # Ignore errors when closing
+            try:
+                self._http_client = httpx.Client(timeout=GENERAL_TIMEOUT, http2=True)
+            except:
+                self._http_client = httpx.Client(timeout=GENERAL_TIMEOUT, http2=False)
+            logger.warning("HTTP client refreshed due to connection error")
+            return self._http_client
+
+    def _should_refresh_client_on_error(self, error: Exception) -> bool:
+        """Check if an error suggests the HTTP client should be refreshed."""
+        error_msg = str(error).lower()
+        return any(keyword in error_msg for keyword in [
+            "broken pipe",
+            "disconnected",
+            "connection reset",
+            "connection closed",
+            "connection aborted"
+        ])
 
     def _clean_up_expired_records(self):
         # remove records that have expired and expired at least CLEAN_RECORD_TIMEOUT seconds ago
@@ -301,6 +327,8 @@ class SwarmClient(object):
                         continue
 
             except Exception as e:
+                if self._should_refresh_client_on_error(e):
+                    self._refresh_http_client()
                 logger.error(f"Error claiming episode: {e}. Retrying ...")
                 retry_delay = START_EPISODE_RETRY_DELAY
                 continue
@@ -379,6 +407,8 @@ class SwarmClient(object):
                 logger.error(f"Failed to end episode {episode_uuid}")
 
         except Exception as e:
+            if self._should_refresh_client_on_error(e):
+                self._refresh_http_client()
             logger.error(f"Error ending episode: {e}")
 
     def sync_train_config(self, agent_jet_job: AgentJetJob):
@@ -437,7 +467,7 @@ class SwarmClient(object):
         self._wait_until_status_change_to(desired_status="ENGINE.ROLLING")
         logger.success("Training engine is now ROLLING and ready.")
 
-    def _wait_until_status_change_to(self, desired_status="ENGINE.ROLLING", verbose=True, timeout=1800):
+    def _wait_until_status_change_to(self, desired_status="ENGINE.ROLLING", verbose=True, timeout=3600):
         """
         Poll engine status until it reaches desired_status.
         Reports status every 5 seconds while waiting.
@@ -479,6 +509,8 @@ class SwarmClient(object):
                 raise e
 
             except Exception as e:
+                if self._should_refresh_client_on_error(e):
+                    self._refresh_http_client()
                 logger.error(f"Error polling engine status: {e}")
                 time.sleep(5)
 
@@ -492,19 +524,20 @@ class SwarmClient(object):
             raise_for_status_with_detail(resp)
             resp_json = resp.json()
             result = resp_json.get("engine_status", "unknown")
-            engine_status_detail = resp_json.get("engine_status_detail", None)
-            global_step = resp_json.get("global_step", None)
+            # engine_status_detail = resp_json.get("engine_status_detail", None)
+            # global_step = resp_json.get("global_step", None)
             if result == "unknown":
                 logger.warning("get_engine_status: " + str(resp_json))
             return result, resp_json
         except Exception as e:
+            if self._should_refresh_client_on_error(e):
+                self._refresh_http_client()
             logger.error(f"Error getting engine status: {e}")
             return "ENGINE.CANNOT_CONNECT", {}
 
     def can_continue_episode(self, episode_uuid: str) -> bool:
         if not episode_uuid:
             return False
-
         try:
             req_obj = CanContinueEpisodeRequest(
                 client_uuid=self.client_uuid,
@@ -519,6 +552,8 @@ class SwarmClient(object):
             data = CanContinueEpisodeResponse.model_validate(resp.json())
             return data.can_continue
         except Exception as e:
+            if self._should_refresh_client_on_error(e):
+                self._refresh_http_client()
             logger.error(f"Error checking can_continue_episode: {e}")
             return False
 
@@ -533,6 +568,8 @@ class SwarmClient(object):
             data = EpisodeBufferResponse.model_validate(resp.json())
             return data.buffer
         except Exception as e:
+            if self._should_refresh_client_on_error(e):
+                self._refresh_http_client()
             logger.error(f"Error getting episode buffer: {e}")
             return []
 
@@ -611,6 +648,8 @@ class SwarmClient(object):
             data = CurrentBatchRolloutPoolInformation.model_validate(resp.json())
             return data
         except Exception as e:
+            if self._should_refresh_client_on_error(e):
+                self._refresh_http_client()
             logger.error(f"Error getting rollout statistics: {e}")
             return CurrentBatchRolloutPoolInformation()
 

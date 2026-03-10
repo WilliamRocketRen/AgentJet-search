@@ -9,15 +9,15 @@ license: Complete terms in LICENSE.txt
 
 Your task is to create a trainable Agent (or Agent Loop, multi-agent system, etc.) based on the requirements, and provide it to the user for reinforcement learning training. Under the AgentJet reinforcement learning framework, this is very simple.
 
-First, give the agent system a name based on the user's requirements, for example `user_math_agent`.
+First, give the agent system a name based on the user's requirements, always place your code at ``tutorial/opencode_build_*`, for example `opencode_build_math_agent`.
 
 Next, create the directory:
-`tutorial/user_math_agent`
+`tutorial/opencode_build_math_agent`
 
 Then, create the Agent source files:
-- `tutorial/user_math_agent/agent_roll.py` (Use `tutorial/example_academic_trans_swarm/trans_roll.py` as a template. There aren't many changes — the key is to ask the user for the necessary parameters.)
-- `tutorial/user_math_agent/agent_run.py` (Create the function or class to run the agent based on the user's requirements. Synchronous or asynchronous are both fine.)
-- `tutorial/user_math_agent/readme.md` (Agent description, along with training and debugging instructions.)
+- `tutorial/opencode_build_math_agent/agent_roll.py` (Use `tutorial/example_academic_trans_swarm/trans_roll.py` as a template. There aren't many changes — the key is to ask the user for the necessary parameters.)
+- `tutorial/opencode_build_math_agent/agent_run.py` (Create the function or class to run the agent based on the user's requirements. Synchronous or asynchronous are both fine.)
+- `tutorial/opencode_build_math_agent/readme.md` (Agent description, along with training and debugging instructions.)
 
 ## How to Write the Agent
 
@@ -54,15 +54,15 @@ Below are some reference materials.
 
 Your task is to create a trainable Agent (or Agent Loop, multi-agent system, etc.) based on the requirements, and provide it to the user for reinforcement learning training. Under the AgentJet reinforcement learning framework, this is very simple.
 
-First, give the agent system a name based on the user's requirements, for example `user_math_agent`.
+First, give the agent system a name based on the user's requirements, for example `opencode_build_math_agent`.
 
 Next, create the directory:
-`tutorial/user_math_agent`
+`tutorial/opencode_build_math_agent`
 
 Then, create the Agent source files:
-- `tutorial/user_math_agent/agent_roll.py` (Use `tutorial/example_academic_trans_swarm/trans_roll.py` as a template. There aren't many changes — the key is to ask the user for the necessary parameters.)
-- `tutorial/user_math_agent/agent_run.py` (Create the function or class to run the agent based on the user's requirements. Synchronous or asynchronous are both fine.)
-- `tutorial/user_math_agent/readme.md` (Agent description, along with training and debugging instructions.)
+- `tutorial/opencode_build_math_agent/agent_roll.py` (Use `tutorial/example_academic_trans_swarm/trans_roll.py` as a template. There aren't many changes — the key is to ask the user for the necessary parameters.)
+- `tutorial/opencode_build_math_agent/agent_run.py` (Create the function or class to run the agent based on the user's requirements. Synchronous or asynchronous are both fine.)
+- `tutorial/opencode_build_math_agent/readme.md` (Agent description, along with training and debugging instructions.)
 
 ## How to Write the Agent
 
@@ -136,7 +136,7 @@ Below are some reference materials.
     Now, create a python script and start coding:
 
     ```python
-    from ajet.tuner_lib.experimental.as_swarm_client import SwarmClient
+    from ajet.tuner_lib.experimental.swarm_client import SwarmClient
     REMOTE_SWARM_URL = "http://localhost:10086" # Change to your swarm remote url
     swarm_worker = SwarmClient(REMOTE_SWARM_URL)
     ```
@@ -364,7 +364,7 @@ Below are some reference materials.
 
     ```python
     from ajet.copilot.job import AgentJetJob
-    from ajet.tuner_lib.experimental.as_swarm_client import SwarmClient, run_episodes_until_all_complete
+    from ajet.tuner_lib.experimental.swarm_client import SwarmClient, run_episodes_until_all_complete
     from ajet.default_config.ajet_default import AjetTaskReader, HuggingfaceDatRepo
     from ajet.task_reader import RouterTaskReader
     from tutorial.example_academic_trans_swarm.trans import execute_agent
