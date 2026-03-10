@@ -73,8 +73,6 @@ class SwarmClient(object):
         self._agent_jet_job = None
         # throttle
         self._recent_seen_tasks = []
-        # reuse httpx client to avoid creating SSL context repeatedly
-        self._http_client = httpx.Client(timeout=GENERAL_TIMEOUT)
 
     def logger_info(self, message):
         # logger with de-duplication within 1 second to prevent log flooding
